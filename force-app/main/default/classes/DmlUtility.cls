@@ -1,10 +1,9 @@
-
 public class DmlUtility implements Queueable {
     public enum Operation {
-        isInsert,
-        isUpdate,
-        isUpsert,
-        isDelete
+        DO_INSERT,
+        DO_UPDATE,
+        DO_UPSERT,
+        DO_DELETE
     }
 
     private List<SObject> records;
@@ -54,12 +53,14 @@ public class DmlUtility implements Queueable {
     public DmlUtility addBeforeInsertHook(Hook h) { beforeInsertHooks.add(h); return this; }
     public DmlUtility addBeforeUpdateHook(Hook h) { beforeUpdateHooks.add(h); return this; }
     public DmlUtility addBeforeDeleteHook(Hook h) { beforeDeleteHooks.add(h); return this; }
+    public DmlUtility addBeforeUpsertHook(Hook h) { beforeUpsertHooks.add(h); return this; }
     public DmlUtility addAfterInsertHook(Hook h) { afterInsertHooks.add(h); return this; }
     public DmlUtility addAfterUpdateHook(Hook h) { afterUpdateHooks.add(h); return this; }
     public DmlUtility addAfterDeleteHook(Hook h) { afterDeleteHooks.add(h); return this; }
+    public DmlUtility addAfterUpsertHook(Hook h) { afterUpsertHooks.add(h); return this; }
 
     // Entry point
-    public void execute() {
+    public void runNow() {
         if (isAsync) {
             System.enqueueJob(this);
             return;
@@ -76,11 +77,14 @@ public class DmlUtility implements Queueable {
         if (isLightweight) {
             executeLightweight();
         } else {
-            execute();
+            runNow();
         }
     }
 
     private void doExecute() {
+        if (records == null || records.isEmpty()) {
+            throw new IllegalArgumentException('You must call setRecords() before execution.');
+        }
         context = new DmlUtilityContext(operation, externalIdField, maxRetry, currentAttempt);
         for (List<SObject> chunk : split(records)) {
             try {
@@ -121,55 +125,64 @@ public class DmlUtility implements Queueable {
 
     private List<DmlResult> performDml(List<SObject> chunk) {
         List<DmlResult> results = new List<DmlResult>();
-        Database.SaveResult[] saveResults;
 
-        switch on operation {
-            when Operation.isInse {
-                saveResults = Database.insert(chunk, false);
+        if (operation == DmlUtility.Operation.DO_INSERT) {
+            Database.SaveResult[] saveResults = Database.insert(chunk, false);
+            for (Integer i = 0; i < chunk.size(); i++) {
+                SObject rec = chunk[i];
+                Database.SaveResult sr = saveResults[i];
+                results.add(sr.isSuccess() ? new DmlResult(rec, sr) : new DmlResult(rec, sr.getErrors()));
             }
-            when Operation.isUpdate {
-                saveResults = Database.update(chunk, false);
+        } else if (operation == DmlUtility.Operation.DO_UPDATE) {
+            Database.SaveResult[] saveResults = Database.update(chunk, false);
+            for (Integer i = 0; i < chunk.size(); i++) {
+                SObject rec = chunk[i];
+                Database.SaveResult sr = saveResults[i];
+                results.add(sr.isSuccess() ? new DmlResult(rec, sr) : new DmlResult(rec, sr.getErrors()));
             }
-            when Operation.isDelete {
-                saveResults = Database.delete(chunk, false);
+        } else if (operation == DmlUtility.Operation.DO_DELETE) {
+            Database.DeleteResult[] delResults = Database.delete(chunk, false);
+            for (Integer i = 0; i < chunk.size(); i++) {
+                SObject rec = chunk[i];
+                Database.DeleteResult dr = delResults[i];
+                results.add(dr.isSuccess() ? new DmlResult(rec, dr) : new DmlResult(rec, dr.getErrors()));
             }
-            when Operation.isUpsert {
-                if (String.isBlank(externalIdField)) throw new IllegalArgumentException('Missing External ID for upsert.');
-                Schema.SObjectType objType = ((SObject)chunk[0]).getSObjectType();
-                Map<String, Schema.SObjectField> fieldsMap = objType.getDescribe().fields.getMap();
-                if (!fieldsMap.containsKey(externalIdField)) {
-                    throw new IllegalArgumentException('Invalid External ID field: ' + externalIdField);
-                }
-                Schema.SObjectField extIdField = fieldsMap.get(externalIdField);
-                saveResults = Database.upsert(chunk, extIdField, false);
+        } else if (operation == DmlUtility.Operation.DO_UPSERT) {
+            if (String.isBlank(externalIdField)) throw new IllegalArgumentException('Missing External ID for upsert.');
+            Schema.SObjectType objType = ((SObject)chunk[0]).getSObjectType();
+            Map<String, Schema.SObjectField> fieldsMap = objType.getDescribe().fields.getMap();
+            if (!fieldsMap.containsKey(externalIdField)) {
+                throw new IllegalArgumentException('Invalid External ID field: ' + externalIdField);
+            }
+            Schema.SObjectField extIdField = fieldsMap.get(externalIdField);
+            Database.UpsertResult[] upsertResults = Database.upsert(chunk, extIdField, false);
+            for (Integer i = 0; i < chunk.size(); i++) {
+                SObject rec = chunk[i];
+                Database.UpsertResult ur = upsertResults[i];
+                results.add(ur.isSuccess() ? new DmlResult(rec, ur) : new DmlResult(rec, ur.getErrors()));
             }
         }
 
-        for (Integer i = 0; i < chunk.size(); i++) {
-            SObject rec = chunk[i];
-            Database.SaveResult sr = saveResults[i];
-            results.add(sr.isSuccess() ? DmlResult.success(rec, sr) : DmlResult.failure(rec, sr.getErrors()));
-        }
         return results;
     }
 
     private void runHooks(List<SObject> chunk, Boolean isBefore) {
         List<Hook> hooks = new List<Hook>();
         if (isBefore) {
-            if (operation == Operation.isInsert) hooks = beforeInsertHooks;
-            if (operation == Operation.isUpdate) hooks = beforeUpdateHooks;
-            if (operation == Operation.isDelete) hooks = beforeDeleteHooks;
-            if (operation == Operation.isUpsert) hooks = beforeUpsertHooks;
+            if (operation == DmlUtility.Operation.DO_INSERT) hooks = beforeInsertHooks;
+            if (operation == DmlUtility.Operation.DO_UPDATE) hooks = beforeUpdateHooks;
+            if (operation == DmlUtility.Operation.DO_DELETE) hooks = beforeDeleteHooks;
+            if (operation == DmlUtility.Operation.DO_UPSERT) hooks = beforeUpsertHooks;
         } else {
-            if (operation == Operation.isInsert) hooks = afterInsertHooks;
-            if (operation == Operation.isUpdate) hooks = afterUpdateHooks;
-            if (operation == Operation.isDelete) hooks = afterDeleteHooks;
-            if (operation == Operation.isUpsert) hooks = afterUpsertHooks;
+            if (operation == DmlUtility.Operation.DO_INSERT) hooks = afterInsertHooks;
+            if (operation == DmlUtility.Operation.DO_UPDATE) hooks = afterUpdateHooks;
+            if (operation == DmlUtility.Operation.DO_DELETE) hooks = afterDeleteHooks;
+            if (operation == DmlUtility.Operation.DO_UPSERT) hooks = afterUpsertHooks;
         }
 
         for (Hook h : hooks) {
             try {
-                h.run(chunk, new HookContext(operation, isBefore));
+                h.run(chunk, context);
             } catch (Exception e) {
                 throw new HookExecutionException('Hook failed: ' + e.getMessage(), e);
             }
@@ -201,7 +214,12 @@ public class DmlUtility implements Queueable {
     private List<List<SObject>> split(List<SObject> input) {
         List<List<SObject>> parts = new List<List<SObject>>();
         for (Integer i = 0; i < input.size(); i += chunkSize) {
-            parts.add(input.subList(i, Math.min(i + chunkSize, input.size())));
+            Integer toIndex = (i + chunkSize < input.size()) ? i + chunkSize : input.size();
+            List<SObject> chunk = new List<SObject>();
+            for (Integer j = i; j < toIndex; j++) {
+                chunk.add(input[j]);
+            }
+            parts.add(chunk);
         }
         return parts;
     }
@@ -230,9 +248,11 @@ public class DmlUtility implements Queueable {
             .setOperation(operation)
             .setExternalId(externalIdField)
             .runAsync()
-            .withMaxRetry(retryLeft)
+            .withMaxRetry(maxRetry)
+            // .withMaxRetry(retryLeft)
             .setAttempt(attempt)
             .copyHooksAndCallbacks(this);
+        cloned.retryAttemptsLeft = retryLeft;
         if (this.isLightweight) {
             cloned.enableLightweightMode();
         }
@@ -268,7 +288,7 @@ public class DmlUtility implements Queueable {
     }
 
     // Interfaces and DTOs
-    public interface Hook { void run(List<SObject> records, HookContext ctx); }
+    public interface Hook { void run(List<SObject> records, DmlUtilityContext ctx); }
     public interface Validator { void validate(List<SObject> records); }
     public interface ResultCallback {
         void handle(SObject record, DmlUtilityContext ctx, Object resultOrError);
@@ -305,23 +325,29 @@ public class DmlUtility implements Queueable {
         public Boolean success;
         public List<Database.Error> errors = new List<Database.Error>();
         public Database.SaveResult saveResult;
+        public Database.DeleteResult deleteResult;
+        public Database.UpsertResult upsertResult;
 
-        public static DmlResult success(SObject record, Database.SaveResult res) {
-            DmlResult r = new DmlResult();
-            r.record = record; r.success = true; r.saveResult = res;
-            return r;
+        public DmlResult() {}
+
+        public DmlResult(SObject record, Database.SaveResult res) {
+            this.record = record; this.success = true; this.saveResult = res;
         }
-
-        public static DmlResult failure(SObject record, List<Database.Error> errors) {
-            DmlResult r = new DmlResult();
-            r.record = record; r.success = false; r.errors = errors;
-            return r;
+        public DmlResult(SObject record, Database.DeleteResult res) {
+            this.record = record; this.success = true; this.deleteResult = res;
         }
-
+        public DmlResult(SObject record, Database.UpsertResult res) {
+            this.record = record; this.success = true; this.upsertResult = res;
+        }
+        public DmlResult(SObject record, List<Database.Error> errors) {
+            this.record = record; this.success = false; this.errors = errors;
+        }
         public Exception getFirstError() {
-            return (!errors.isEmpty()) ? new Exception(errors[0].getMessage()) : new Exception('Unknown failure');
+            return (!errors.isEmpty()) ? new DmlException(errors[0].getMessage()) : new DmlException('Unknown failure');
         }
     }
 
     public class HookExecutionException extends Exception {}
+    public class DmlException extends Exception {}
 }
+
