@@ -26,6 +26,9 @@ public class DmlHookManagerTest {
     // Test hook implementations
     public class TestBeforeInsertHook implements DmlHookManager.Hook {
         public void run(List<SObject> records, DmlContext context) {
+            if (records == null) {
+                return;
+            }
             for (SObject record : records) {
                 if (record instanceof Account) {
                     Account acc = (Account) record;
@@ -37,6 +40,9 @@ public class DmlHookManagerTest {
     
     public class TestAfterInsertHook implements DmlHookManager.Hook {
         public void run(List<SObject> records, DmlContext context) {
+            if (records == null) {
+                return;
+            }
             for (SObject record : records) {
                 if (record instanceof Account) {
                     Account acc = (Account) record;
@@ -559,4 +565,4 @@ public class DmlHookManagerTest {
         // Assert - should handle mixed success and failure
         System.assert(true, 'Should handle mixed success and failure gracefully');
     }
-} 
+}

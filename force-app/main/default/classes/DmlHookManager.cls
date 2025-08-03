@@ -211,9 +211,11 @@ public class DmlHookManager {
             context.log(errorMsg);
             
             // Notify error callbacks
-            for (SObject record : records) {
-                for (HookErrorCallback callback : hookErrorCallbacks) {
-                    callback.onHookError(record, context, e);
+            if (records != null) {
+                for (SObject record : records) {
+                    for (HookErrorCallback callback : hookErrorCallbacks) {
+                        callback.onHookError(record, context, e);
+                    }
                 }
             }
         } else {
@@ -223,6 +225,8 @@ public class DmlHookManager {
     
     /**
      * Hook interface for DML operations
+     * 
+     * Note: Implementations should handle null or empty records lists gracefully
      */
     public interface Hook {
         void run(List<SObject> records, DmlContext context);
@@ -239,4 +243,4 @@ public class DmlHookManager {
      * Exception thrown when hook execution fails
      */
     public class HookExecutionException extends Exception {}
-} 
+}
