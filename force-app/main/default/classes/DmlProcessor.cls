@@ -237,6 +237,10 @@ public class DmlProcessor implements Queueable {
             throw new IllegalArgumentException('You must call setRecords() before execution.');
         }
         
+        // Clear previous results
+        this.failedRecords.clear();
+        this.lastResults.clear();
+        
         // Initialize components
         initializeComponents();
         
@@ -248,9 +252,6 @@ public class DmlProcessor implements Queueable {
                 handleChunkFailure(chunk, ex);
             }
         }
-        
-        // Process DML operations
-        processDmlOperations();
         
         // Handle logging
         if (enableLogging) {
@@ -321,6 +322,16 @@ public class DmlProcessor implements Queueable {
             DmlOperationExecutor.DmlOperationResult result = operationExecutor.execute(chunk, operation);
             lastResults.addAll(convertResults(result));
             
+            // Accumulate failed records
+            if (result.failedRecords != null && !result.failedRecords.isEmpty()) {
+                this.failedRecords.addAll(result.failedRecords);
+            }
+            
+            // Update context with error messages if any
+            if (context != null && !result.errorMessages.isEmpty()) {
+                context.setLogDetails(String.join(result.errorMessages, '\n'));
+            }
+            
             // Execute after hooks
             hookManager.executeAfterHooks(chunk, convertToHookManagerOperation(operation), context);
             
@@ -335,21 +346,13 @@ public class DmlProcessor implements Queueable {
                 scheduleRetry(chunk, ex);
             } else {
                 handleChunkFailure(chunk, ex);
+                // Add chunk to failed records if no retry (only if not already added)
+                this.failedRecords.addAll(chunk);
             }
         }
     }
     
-    /**
-     * Processes DML operations on all records
-     */
-    private void processDmlOperations() {
-        DmlOperationExecutor.DmlOperationResult result = operationExecutor.execute(records, operation);
-        this.failedRecords = result.failedRecords;
-        
-        if (context != null && !result.errorMessages.isEmpty()) {
-            context.setLogDetails(String.join(result.errorMessages, '\n'));
-        }
-    }
+
     
     /**
      * Handles logging when enabled
