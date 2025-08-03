@@ -54,6 +54,11 @@ public class DmlChunker {
             return new List<List<SObject>>();
         }
         
+        // Handle invalid chunk sizes
+        if (chunkSize <= 0) {
+            return new List<List<SObject>>();
+        }
+        
         List<List<SObject>> chunks = new List<List<SObject>>();
         
         for (Integer i = 0; i < records.size(); i += chunkSize) {
@@ -113,4 +118,4 @@ public class DmlChunker {
      * Exception thrown for DML-related errors
      */
     public class DmlException extends Exception {}
-} 
+}

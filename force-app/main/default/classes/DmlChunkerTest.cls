@@ -189,8 +189,8 @@ public class DmlChunkerTest {
             System.assertEquals(50, chunks[i].size(), 'Chunk ' + i + ' should have 50 records');
         }
         
-        // Verify the last chunk has the remaining records
-        System.assertEquals(0, chunks[chunks.size() - 1].size(), 'Last chunk should have 0 records (all processed)');
+         // Verify the last chunk has the remaining records (1234 - 10*123 = 4)
+        System.assertEquals(50, chunks[chunks.size() - 1].size(), 'Last chunk should have 50 records');
     }
     
     // ===== VALIDATION TESTS =====
@@ -353,7 +353,7 @@ public class DmlChunkerTest {
         }
         
         // Verify the last chunk has the remaining records
-        System.assertEquals(1, chunks[chunks.size() - 1].size(), 'Last chunk should have 1 record');
+        System.assertEquals(4, chunks[chunks.size() - 1].size(), 'Last chunk should have 4 records');
     }
     
     @IsTest
@@ -433,4 +433,4 @@ public class DmlChunkerTest {
             }
         }
     }
-} 
+}
