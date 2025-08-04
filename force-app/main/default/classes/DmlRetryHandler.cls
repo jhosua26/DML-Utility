@@ -1,6 +1,18 @@
 public class DmlRetryHandler {
     public static void scheduleRetry(DmlUtility originalJob, List<SObject> failedRecords, Integer retryLeft, Integer attempt) {
+        // Validate input parameters
+        if (failedRecords == null) {
+            throw new IllegalArgumentException('Failed records cannot be null');
+        }
+        
+        if (failedRecords.isEmpty()) {
+            return; // No point in scheduling retry for empty records
+        }
+        
         String serializedRecords = JSON.serialize(failedRecords);
+        
+        // Note: Field length limit validation will be handled by DML operation
+        // if the data exceeds the configured field size
 
         // Create retry job record
         DmlRetryJob__c job = new DmlRetryJob__c(
@@ -30,7 +42,19 @@ public class DmlRetryHandler {
      * @param attempt Current attempt number
      */
     public static void scheduleRetry(DmlProcessor processor, List<SObject> failedRecords, Integer retryLeft, Integer attempt) {
+        // Validate input parameters
+        if (failedRecords == null) {
+            throw new IllegalArgumentException('Failed records cannot be null');
+        }
+        
+        if (failedRecords.isEmpty()) {
+            return; // No point in scheduling retry for empty records
+        }
+        
         String serializedRecords = JSON.serialize(failedRecords);
+        
+        // Note: Field length limit validation will be handled by DML operation
+        // if the data exceeds the configured field size
 
         // Create retry job record
         DmlRetryJob__c job = new DmlRetryJob__c(
@@ -60,11 +84,7 @@ public class DmlRetryHandler {
     }
 
     private static String getCronExpression(Datetime dt) {
-        return String.format('%d %d %d %d %d ? %d',
-            new List<Object>{
-                dt.second(), dt.minute(), dt.hour(),
-                dt.day(), dt.month(), dt.year()
-            }
-        );
+        return dt.second() + ' ' + dt.minute() + ' ' + dt.hour() + ' ' + 
+       dt.day() + ' ' + dt.month() + ' ? ' + dt.year();
     }
 }
