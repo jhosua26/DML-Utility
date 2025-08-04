@@ -14,7 +14,15 @@ public class DmlScheduledRetryHandler implements Schedulable {
         DmlRetryJob__c job = jobs[0];
 
         try {
-            List<SObject> records = (List<SObject>) JSON.deserializeUntyped(job.SerializedRecord__c);
+            // Deserialize records - handle the JSON deserialization properly
+            List<SObject> records = deserializeRecords(job.SerializedRecord__c);
+            
+            // Skip processing if no records (empty list should complete successfully)
+            if (records.isEmpty()) {
+                job.Status__c = 'Completed';
+                update job;
+                return;
+            }
             
             // Convert operation string to enum
             DmlOperationExecutor.Operation op = DmlOperationExecutor.Operation.valueOf(job.Operation__c);
@@ -37,5 +45,44 @@ public class DmlScheduledRetryHandler implements Schedulable {
         }
 
         update job;
+    }
+    
+    /**
+     * Helper method to properly deserialize SObject records from JSON
+     * Handles the conversion from JSON to SObject instances
+     */
+    private List<SObject> deserializeRecords(String serializedRecords) {
+        List<SObject> records = new List<SObject>();
+        
+        // Deserialize to generic objects first
+        List<Object> rawObjects = (List<Object>) JSON.deserializeUntyped(serializedRecords);
+        
+        if (rawObjects.isEmpty()) {
+            return records;
+        }
+        
+        // Convert each object back to SObject
+        for (Object rawObj : rawObjects) {
+            Map<String, Object> recordMap = (Map<String, Object>) rawObj;
+            
+            // Extract the SObject type from the attributes
+            Map<String, Object> attributes = (Map<String, Object>) recordMap.get('attributes');
+            String objectType = (String) attributes.get('type');
+            
+            // Create a new SObject instance
+            SObject record = Schema.getGlobalDescribe().get(objectType).newSObject();
+            
+            // Populate the fields
+            for (String fieldName : recordMap.keySet()) {
+                if (fieldName != 'attributes') {
+                    Object fieldValue = recordMap.get(fieldName);
+                    record.put(fieldName, fieldValue);
+                }
+            }
+            
+            records.add(record);
+        }
+        
+        return records;
     }
 }
