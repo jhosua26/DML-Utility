@@ -39,7 +39,13 @@ public class DmlScheduledRetryHandler implements Schedulable {
 
             processor.runNow();
 
-            job.Status__c = 'Completed';
+            // Check if there were any failed records after processing
+            List<SObject> failedRecords = processor.getFailedRecords();
+            if (failedRecords != null && !failedRecords.isEmpty()) {
+                job.Status__c = 'Failed';
+            } else {
+                job.Status__c = 'Completed';
+            }
         } catch (Exception ex) {
             job.Status__c = 'Failed';
         }

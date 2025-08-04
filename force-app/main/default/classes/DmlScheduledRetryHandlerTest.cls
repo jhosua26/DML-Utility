@@ -324,10 +324,11 @@ public class DmlScheduledRetryHandlerTest {
     @IsTest
     static void testExecuteWithDmlException() {
         // Arrange - Create job with records that will cause DML errors
+        // Create accounts with extremely long names to exceed field limits
         List<Account> accounts = new List<Account>();
+        String longName = 'a'.repeat(300); // Account Name field typically has a 255 character limit
         for (Integer i = 0; i < 3; i++) {
-            Account acc = new Account();
-            // Don't set Name - this will cause validation error
+            Account acc = new Account(Name = longName + i);
             accounts.add(acc);
         }
         
@@ -446,8 +447,9 @@ public class DmlScheduledRetryHandlerTest {
     static void testExecuteWithMixedSuccessAndFailure() {
         // Arrange - Create some valid and some invalid records
         List<Account> accounts = new List<Account>();
+        String longName = 'a'.repeat(300); // Exceeds 255 character limit
         accounts.add(new Account(Name = 'Valid Account 1'));
-        accounts.add(new Account()); // Invalid - no name
+        accounts.add(new Account(Name = longName)); // Invalid - name too long
         accounts.add(new Account(Name = 'Valid Account 2'));
         
         DmlRetryJob__c job = createTestRetryJob();
