@@ -42,10 +42,8 @@ public class DmlRetryHandlerTest {
         Integer retryLeft = 2;
         Integer attempt = 1;
         
-        // Act
-        Test.startTest();
+        // Act - Don't use Test.startTest/stopTest to avoid triggering scheduled job execution
         DmlRetryHandler.scheduleRetry(originalJob, failedRecords, retryLeft, attempt);
-        Test.stopTest();
         
         // Assert
         List<DmlRetryJob__c> jobs = [SELECT Id, SerializedRecord__c, Operation__c, ExternalIdField__c,
@@ -73,10 +71,8 @@ public class DmlRetryHandlerTest {
         DmlProcessor originalJob = createMockDmlProcessor().runAsync();
         List<Account> failedRecords = createTestAccounts(1);
         
-        // Act
-        Test.startTest();
+        // Act - Don't use Test.startTest/stopTest to avoid triggering scheduled job execution
         DmlRetryHandler.scheduleRetry(originalJob, failedRecords, 1, 2);
-        Test.stopTest();
         
         // Assert
         List<DmlRetryJob__c> jobs = [SELECT Id, IsAsync__c FROM DmlRetryJob__c];
@@ -90,10 +86,8 @@ public class DmlRetryHandlerTest {
         DmlProcessor originalJob = createMockDmlProcessor().enableLightweightMode();
         List<Account> failedRecords = createTestAccounts(1);
         
-        // Act
-        Test.startTest();
+        // Act - Don't use Test.startTest/stopTest to avoid triggering scheduled job execution
         DmlRetryHandler.scheduleRetry(originalJob, failedRecords, 1, 2);
-        Test.stopTest();
         
         // Assert
         List<DmlRetryJob__c> jobs = [SELECT Id, IsLightweight__c FROM DmlRetryJob__c];
@@ -107,10 +101,8 @@ public class DmlRetryHandlerTest {
         DmlProcessor originalJob = createMockDmlProcessor();
         List<Account> failedRecords = new List<Account>();
         
-        // Act
-        Test.startTest();
+        // Act - Don't use Test.startTest/stopTest to avoid triggering scheduled job execution
         DmlRetryHandler.scheduleRetry(originalJob, failedRecords, 1, 1);
-        Test.stopTest();
         
         // Assert - should not create job for empty records (no point in retrying nothing)
         List<DmlRetryJob__c> jobs = [SELECT Id, SerializedRecord__c FROM DmlRetryJob__c];
@@ -123,15 +115,13 @@ public class DmlRetryHandlerTest {
         DmlProcessor originalJob = createMockDmlProcessor();
         List<Account> failedRecords = null;
         
-        // Act & Assert
-        Test.startTest();
+        // Act & Assert - Don't use Test.startTest/stopTest to avoid triggering scheduled job execution
         try {
             DmlRetryHandler.scheduleRetry(originalJob, failedRecords, 1, 1);
             System.assert(false, 'Should throw exception for null records');
         } catch (Exception e) {
             System.assert(e.getMessage().contains('null'), 'Should handle null records gracefully');
         }
-        Test.stopTest();
     }
     
     // ===== DELAY CALCULATION TESTS =====
@@ -214,8 +204,7 @@ public class DmlRetryHandlerTest {
         DmlProcessor originalJob = createMockDmlProcessor();
         List<Account> failedRecords = createTestAccounts(2);
         
-        // Act - Schedule retry
-        Test.startTest();
+        // Act - Schedule retry (without Test.startTest to avoid auto-execution)
         DmlRetryHandler.scheduleRetry(originalJob, failedRecords, 1, 1);
         
         // Verify job was created
@@ -223,7 +212,8 @@ public class DmlRetryHandlerTest {
         System.assertEquals(1, jobs.size());
         System.assertEquals('Pending', jobs[0].Status__c);
         
-        // Simulate scheduled execution
+        // Simulate scheduled execution manually
+        Test.startTest();
         DmlScheduledRetryHandler handler = new DmlScheduledRetryHandler();
         handler.execute(null);
         Test.stopTest();
@@ -242,11 +232,9 @@ public class DmlRetryHandlerTest {
         DmlProcessor job2 = createMockDmlProcessor();
         List<Account> failedRecords = createTestAccounts(1);
         
-        // Act
-        Test.startTest();
+        // Act - Don't use Test.startTest/stopTest to avoid triggering scheduled job execution
         DmlRetryHandler.scheduleRetry(job1, failedRecords, 2, 1);
         DmlRetryHandler.scheduleRetry(job2, failedRecords, 1, 2);
-        Test.stopTest();
         
         // Assert
         List<DmlRetryJob__c> jobs = [SELECT Id, RetryLeft__c, Attempt__c FROM DmlRetryJob__c];
@@ -271,10 +259,8 @@ public class DmlRetryHandlerTest {
         DmlProcessor originalJob = createMockDmlProcessor();
         List<Account> failedRecords = createTestAccounts(1);
         
-        // Act
-        Test.startTest();
+        // Act - Don't use Test.startTest/stopTest to avoid triggering scheduled job execution
         DmlRetryHandler.scheduleRetry(originalJob, failedRecords, 0, 3);
-        Test.stopTest();
         
         // Assert
         List<DmlRetryJob__c> jobs = [SELECT Id, RetryLeft__c, Attempt__c FROM DmlRetryJob__c];
@@ -289,8 +275,7 @@ public class DmlRetryHandlerTest {
         DmlProcessor originalJob = createMockDmlProcessor();
         List<Account> failedRecords = createTestAccounts(1000); // Large record set
         
-        // Act & Assert
-        Test.startTest();
+        // Act & Assert - Don't use Test.startTest/stopTest to avoid triggering scheduled job execution
         try {
             DmlRetryHandler.scheduleRetry(originalJob, failedRecords, 1, 1);
             
@@ -306,7 +291,6 @@ public class DmlRetryHandlerTest {
                          e.getMessage().contains('data value too large'), 
                          'Should handle large record sets with appropriate error: ' + e.getMessage());
         }
-        Test.stopTest();
     }
     
     // ===== ERROR HANDLING TESTS =====
@@ -318,10 +302,8 @@ public class DmlRetryHandlerTest {
         // Set an invalid operation (this would need to be handled in the actual implementation)
         List<Account> failedRecords = createTestAccounts(1);
         
-        // Act
-        Test.startTest();
+        // Act - Don't use Test.startTest/stopTest to avoid triggering scheduled job execution
         DmlRetryHandler.scheduleRetry(originalJob, failedRecords, 1, 1);
-        Test.stopTest();
         
         // Assert - Should not throw exception
         List<DmlRetryJob__c> jobs = [SELECT Id FROM DmlRetryJob__c];
