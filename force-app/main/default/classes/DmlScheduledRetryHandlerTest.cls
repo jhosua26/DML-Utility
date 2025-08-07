@@ -30,6 +30,7 @@ public class DmlScheduledRetryHandlerTest {
             SerializedRecord__c = serializedRecords,
             Operation__c = 'DO_INSERT',
             ExternalIdField__c = 'External_Id__c',
+            SObjectType__c = 'Account',
             RetryLeft__c = 2,
             Attempt__c = 1,
             IsAsync__c = false,
@@ -479,5 +480,145 @@ public class DmlScheduledRetryHandlerTest {
         // Assert - Should process one job per execution
         List<DmlRetryJob__c> processedJobs = [SELECT Id, Status__c FROM DmlRetryJob__c WHERE Status__c != 'Pending'];
         System.assertEquals(1, processedJobs.size(), 'Should process only one job per execution');
+    }
+    
+    // ===== NEW TESTS FOR ENHANCED FUNCTIONALITY =====
+    
+    @IsTest
+    static void testExecuteWithMissingSObjectType() {
+        // Arrange - Create job without SObjectType
+        DmlRetryJob__c job = createTestRetryJob();
+        job.SObjectType__c = null;
+        insert job;
+        
+        // Act
+        Test.startTest();
+        DmlScheduledRetryHandler handler = new DmlScheduledRetryHandler();
+        handler.execute(null);
+        Test.stopTest();
+        
+        // Assert - Should fail gracefully
+        List<DmlRetryJob__c> updatedJobs = [SELECT Id, Status__c, ErrorMessage__c FROM DmlRetryJob__c WHERE Id = :job.Id];
+        System.assertEquals(1, updatedJobs.size());
+        System.assertEquals('Failed', updatedJobs[0].Status__c);
+        System.assert(updatedJobs[0].ErrorMessage__c.contains('SObjectType cannot be blank'), 
+                     'Should have appropriate error message');
+    }
+    
+    @IsTest
+    static void testExecuteWithInvalidSObjectType() {
+        // Arrange - Create job with invalid SObjectType
+        DmlRetryJob__c job = createTestRetryJob();
+        job.SObjectType__c = 'InvalidSObjectType';
+        insert job;
+        
+        // Act
+        Test.startTest();
+        DmlScheduledRetryHandler handler = new DmlScheduledRetryHandler();
+        handler.execute(null);
+        Test.stopTest();
+        
+        // Assert - Should fail gracefully
+        List<DmlRetryJob__c> updatedJobs = [SELECT Id, Status__c, ErrorMessage__c FROM DmlRetryJob__c WHERE Id = :job.Id];
+        System.assertEquals(1, updatedJobs.size());
+        System.assertEquals('Failed', updatedJobs[0].Status__c);
+        System.assert(updatedJobs[0].ErrorMessage__c != null, 'Should have error message');
+    }
+    
+    @IsTest
+    static void testExecuteWithRetryScheduling() {
+        // Arrange - Create job with retries left
+        DmlRetryJob__c job = createTestRetryJob();
+        job.RetryLeft__c = 2;
+        job.Attempt__c = 1;
+        // Make it fail by using invalid operation
+        job.Operation__c = 'INVALID_OPERATION';
+        insert job;
+        
+        // Act
+        Test.startTest();
+        DmlScheduledRetryHandler handler = new DmlScheduledRetryHandler();
+        handler.execute(null);
+        Test.stopTest();
+        
+        // Assert - Should create retry job and mark original as failed
+        List<DmlRetryJob__c> allJobs = [SELECT Id, Status__c, RetryLeft__c, Attempt__c, ErrorMessage__c FROM DmlRetryJob__c];
+        
+        // Original job should be marked as failed
+        DmlRetryJob__c originalJob = null;
+        DmlRetryJob__c retryJob = null;
+        
+        for (DmlRetryJob__c j : allJobs) {
+            if (j.Id == job.Id) {
+                originalJob = j;
+            } else {
+                retryJob = j;
+            }
+        }
+        
+        System.assertNotEquals(null, originalJob, 'Original job should exist');
+        System.assertEquals('Failed', originalJob.Status__c, 'Original job should be failed');
+        System.assert(originalJob.ErrorMessage__c != null, 'Should have error message');
+        
+        // Should have created a retry job
+        System.assertNotEquals(null, retryJob, 'Should have created retry job');
+        System.assertEquals('Pending', retryJob.Status__c, 'Retry job should be pending');
+        System.assertEquals(1, retryJob.RetryLeft__c, 'Retry job should have decremented retry count');
+        System.assertEquals(2, retryJob.Attempt__c, 'Retry job should have incremented attempt');
+    }
+    
+    @IsTest
+    static void testExecuteWithNoRetriesLeft() {
+        // Arrange - Create job with no retries left
+        DmlRetryJob__c job = createTestRetryJob();
+        job.RetryLeft__c = 0;
+        job.Attempt__c = 3;
+        // Make it fail by using invalid operation
+        job.Operation__c = 'INVALID_OPERATION';
+        insert job;
+        
+        // Act
+        Test.startTest();
+        DmlScheduledRetryHandler handler = new DmlScheduledRetryHandler();
+        handler.execute(null);
+        Test.stopTest();
+        
+        // Assert - Should not create retry job
+        List<DmlRetryJob__c> allJobs = [SELECT Id, Status__c FROM DmlRetryJob__c];
+        System.assertEquals(1, allJobs.size(), 'Should not create additional retry jobs');
+        System.assertEquals('Failed', allJobs[0].Status__c, 'Job should be marked as failed');
+    }
+    
+    @IsTest
+    static void testDeserializeRecordsSuccess() {
+        // This test verifies the type-safe deserialization works correctly
+        // Arrange
+        List<Account> accounts = createTestAccounts(2);
+        String serializedRecords = JSON.serialize(accounts);
+        
+        DmlRetryJob__c job = new DmlRetryJob__c(
+            SerializedRecord__c = serializedRecords,
+            Operation__c = 'DO_INSERT',
+            ExternalIdField__c = 'External_Id__c',
+            SObjectType__c = 'Account',
+            RetryLeft__c = 1,
+            Attempt__c = 1,
+            IsAsync__c = false,
+            IsLightweight__c = false,
+            Status__c = 'Pending'
+        );
+        insert job;
+        
+        // Act
+        Test.startTest();
+        DmlScheduledRetryHandler handler = new DmlScheduledRetryHandler();
+        handler.execute(null);
+        Test.stopTest();
+        
+        // Assert - Should complete successfully
+        List<DmlRetryJob__c> updatedJobs = [SELECT Id, Status__c, ErrorMessage__c FROM DmlRetryJob__c WHERE Id = :job.Id];
+        System.assertEquals(1, updatedJobs.size());
+        System.assertEquals('Completed', updatedJobs[0].Status__c, 'Job should complete successfully');
+        System.assertEquals(null, updatedJobs[0].ErrorMessage__c, 'Should have no error message');
     }
 } 
