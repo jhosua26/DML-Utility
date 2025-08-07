@@ -40,8 +40,14 @@ public class DmlScheduledRetryHandler implements Schedulable {
 
             processor.runNow();
 
-            job.Status__c = 'Completed';
-            job.ErrorMessage__c = null; // Clear any previous error
+            List<SObject> failedRecords = processor.getFailedRecords();
+            if (failedRecords != null && !failedRecords.isEmpty()) {
+                job.Status__c = 'Failed';
+                job.ErrorMessage__c = 'Partial failure: ' + failedRecords.size() + ' record(s) failed.';
+            } else {
+                job.Status__c = 'Completed';
+                job.ErrorMessage__c = null; // Clear any previous error
+            }
             
         } catch (Exception ex) {
             System.debug(LoggingLevel.ERROR, 'DmlScheduledRetryHandler failed for job ' + job.Id + ': ' + ex.getMessage());
