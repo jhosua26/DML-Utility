@@ -24,7 +24,12 @@ public class DmlProcessorTest {
     private static List<Account> createTestAccounts(Integer count) {
         List<Account> accounts = new List<Account>();
         for (Integer i = 0; i < count; i++) {
-            accounts.add(new Account(Name = 'Test Account ' + i));
+            Account acc = new Account(
+                Name = 'Test Account ' + i,
+                Type = 'Customer',
+                Industry = 'Technology'
+            );
+            accounts.add(acc);
         }
         return accounts;
     }
@@ -1067,7 +1072,13 @@ public class DmlProcessorTest {
     @IsTest
     static void testSingleRecord() {
         // Arrange
-        List<Account> accounts = new List<Account>{ new Account(Name = 'Single Test Account') };
+        List<Account> accounts = new List<Account>{ 
+            new Account(
+                Name = 'Single Test Account',
+                Type = 'Customer',
+                Industry = 'Technology'
+            )
+        };
         
         // Act
         Test.startTest();
@@ -1206,7 +1217,13 @@ public class DmlProcessorTest {
     @IsTest
     static void testDebugSimpleInsert() {
         // Arrange
-        List<Account> accounts = new List<Account>{ new Account(Name = 'Debug Test Account') };
+        List<Account> accounts = new List<Account>{ 
+            new Account(
+                Name = 'Debug Test Account',
+                Type = 'Customer',
+                Industry = 'Technology'
+            )
+        };
         
         // Act
         Test.startTest();
@@ -1221,6 +1238,29 @@ public class DmlProcessorTest {
             
             List<SObject> failedRecords = processor.getFailedRecords();
             System.debug('Failed records count: ' + failedRecords.size());
+            
+            // Log details about failed records
+            if (!failedRecords.isEmpty()) {
+                System.debug('Failed records details:');
+                for (SObject failedRecord : failedRecords) {
+                    System.debug('Failed record: ' + failedRecord);
+                }
+                
+                // Try to get more error details by running a simple insert directly
+                try {
+                    List<Account> testAccounts = new List<Account>{ 
+                        new Account(
+                            Name = 'Direct Insert Test',
+                            Type = 'Customer',
+                            Industry = 'Technology'
+                        )
+                    };
+                    insert testAccounts;
+                    System.debug('Direct insert succeeded - issue is with DmlProcessor');
+                } catch (Exception directEx) {
+                    System.debug('Direct insert also failed: ' + directEx.getMessage());
+                }
+            }
             
         } catch (Exception e) {
             System.debug('Exception occurred: ' + e.getMessage());
