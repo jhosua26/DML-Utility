@@ -19,6 +19,10 @@ public class DmlRetryHandler {
             return; // No point in scheduling retry for empty records
         }
         
+        if (failedRecords.isEmpty()) {
+            return; // No point in scheduling retry for empty records
+        }
+        
         // Extract SObject type from failed records
         String sObjectType = getSObjectType(failedRecords);
         
@@ -50,11 +54,11 @@ public class DmlRetryHandler {
         if (processor == null) {
             throw new IllegalArgumentException('Processor cannot be null');
         }
-
+        
         if (failedRecords.isEmpty()) {
             return; // No point in scheduling retry for empty records
         }
-
+        
         // Extract SObject type from failed records
         String sObjectType = getSObjectType(failedRecords);
         
@@ -139,6 +143,8 @@ public class DmlRetryHandler {
         if (attempt == null || attempt < 1) {
             throw new IllegalArgumentException('Attempt must be greater than 0, got: ' + attempt);
         }
+        
+        // Note: We allow retryLeft == 0 for the final attempt, but warn that no further retries will be scheduled
     }
     
     /**
