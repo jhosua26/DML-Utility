@@ -88,6 +88,11 @@ public class DmlProcessor implements Queueable {
         return this; 
     }
     
+    public DmlProcessor setAttempt(Integer attempt) {
+        this.currentAttempt = attempt;
+        return this;
+    }
+    
     public DmlProcessor withLogging() { 
         this.enableLogging = true; 
         return this; 
@@ -199,6 +204,14 @@ public class DmlProcessor implements Queueable {
     
     public Integer getMaxRetry() {
         return maxRetry;
+    }
+    
+    /**
+     * Returns the list of failed records from the last execution
+     * @return List<SObject> List of failed records
+     */
+    public List<SObject> getFailedRecords() {
+        return this.failedRecords;
     }
     
     // Entry points
