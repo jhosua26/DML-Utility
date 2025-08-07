@@ -39,7 +39,7 @@ public class DmlProcessorTest {
     
     // Test hook implementations
     public class TestBeforeInsertHook implements DmlHookManager.Hook {
-        public void execute(List<SObject> records, DmlContext context) {
+        public void run(List<SObject> records, DmlContext context) {
             for (SObject record : records) {
                 if (record instanceof Account) {
                     Account acc = (Account) record;
@@ -52,7 +52,7 @@ public class DmlProcessorTest {
     }
     
     public class TestBeforeUpdateHook implements DmlHookManager.Hook {
-        public void execute(List<SObject> records, DmlContext context) {
+        public void run(List<SObject> records, DmlContext context) {
             for (SObject record : records) {
                 if (record instanceof Account) {
                     Account acc = (Account) record;
@@ -63,14 +63,14 @@ public class DmlProcessorTest {
     }
     
     public class TestBeforeDeleteHook implements DmlHookManager.Hook {
-        public void execute(List<SObject> records, DmlContext context) {
+        public void run(List<SObject> records, DmlContext context) {
             // Log deletion attempt
             System.debug('About to delete ' + records.size() + ' records');
         }
     }
     
     public class TestBeforeUpsertHook implements DmlHookManager.Hook {
-        public void execute(List<SObject> records, DmlContext context) {
+        public void run(List<SObject> records, DmlContext context) {
             for (SObject record : records) {
                 if (record instanceof Account) {
                     Account acc = (Account) record;
@@ -81,31 +81,31 @@ public class DmlProcessorTest {
     }
     
     public class TestAfterInsertHook implements DmlHookManager.Hook {
-        public void execute(List<SObject> records, DmlContext context) {
+        public void run(List<SObject> records, DmlContext context) {
             System.debug('After insert hook executed for ' + records.size() + ' records');
         }
     }
     
     public class TestAfterUpdateHook implements DmlHookManager.Hook {
-        public void execute(List<SObject> records, DmlContext context) {
+        public void run(List<SObject> records, DmlContext context) {
             System.debug('After update hook executed for ' + records.size() + ' records');
         }
     }
     
     public class TestAfterDeleteHook implements DmlHookManager.Hook {
-        public void execute(List<SObject> records, DmlContext context) {
+        public void run(List<SObject> records, DmlContext context) {
             System.debug('After delete hook executed for ' + records.size() + ' records');
         }
     }
     
     public class TestAfterUpsertHook implements DmlHookManager.Hook {
-        public void execute(List<SObject> records, DmlContext context) {
+        public void run(List<SObject> records, DmlContext context) {
             System.debug('After upsert hook executed for ' + records.size() + ' records');
         }
     }
     
     public class TestHookErrorCallback implements DmlHookManager.HookErrorCallback {
-        public void handleHookError(Exception ex, List<SObject> records, DmlContext context) {
+        public void onHookError(SObject record, DmlContext context, Exception ex) {
             System.debug('Hook error callback executed: ' + ex.getMessage());
         }
     }
