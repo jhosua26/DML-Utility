@@ -14,6 +14,10 @@ public class DmlRetryHandler {
         if (originalJob == null) {
             throw new IllegalArgumentException('Original job cannot be null');
         }
+
+        if (failedRecords.isEmpty()) {
+            return; // No point in scheduling retry for empty records
+        }
         
         if (failedRecords.isEmpty()) {
             return; // No point in scheduling retry for empty records

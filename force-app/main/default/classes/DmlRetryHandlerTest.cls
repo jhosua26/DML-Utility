@@ -300,7 +300,6 @@ public class DmlRetryHandlerTest {
             // If no exception, verify the job was created successfully
             List<DmlRetryJob__c> jobs = [SELECT Id, SerializedRecord__c FROM DmlRetryJob__c];
             System.assertEquals(1, jobs.size(), 'Should create retry job if data fits');
-            
             Type listType = Type.forName('List<Account>');
             List<SObject> deserializedRecords = (List<SObject>) JSON.deserialize(jobs[0].SerializedRecord__c, listType);
             System.assertEquals(200, deserializedRecords.size(), 'Should handle large record sets');
