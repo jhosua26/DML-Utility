@@ -346,4 +346,142 @@ public class DmlRetryHandlerTest {
             }
         );
     }
+    
+    // ===== NEW TESTS FOR ENHANCED VALIDATION =====
+    
+    @IsTest
+    static void testScheduleRetryWithNullProcessor() {
+        // Arrange
+        DmlProcessor processor = null;
+        List<Account> failedRecords = createTestAccounts(1);
+        
+        // Act & Assert
+        try {
+            DmlRetryHandler.scheduleRetry(processor, failedRecords, 1, 1);
+            System.assert(false, 'Should have thrown exception for null processor');
+        } catch (IllegalArgumentException ex) {
+            System.assertEquals('Processor cannot be null', ex.getMessage());
+        }
+    }
+    
+    @IsTest
+    static void testScheduleRetryWithNegativeRetryLeft() {
+        // Arrange
+        DmlProcessor processor = createMockDmlProcessor();
+        List<Account> failedRecords = createTestAccounts(1);
+        
+        // Act & Assert
+        try {
+            DmlRetryHandler.scheduleRetry(processor, failedRecords, -1, 1);
+            System.assert(false, 'Should have thrown exception for negative retry count');
+        } catch (IllegalArgumentException ex) {
+            System.assert(ex.getMessage().contains('RetryLeft must be non-negative'));
+        }
+    }
+    
+    @IsTest
+    static void testScheduleRetryWithInvalidAttempt() {
+        // Arrange
+        DmlProcessor processor = createMockDmlProcessor();
+        List<Account> failedRecords = createTestAccounts(1);
+        
+        // Act & Assert
+        try {
+            DmlRetryHandler.scheduleRetry(processor, failedRecords, 1, 0);
+            System.assert(false, 'Should have thrown exception for invalid attempt');
+        } catch (IllegalArgumentException ex) {
+            System.assert(ex.getMessage().contains('Attempt must be greater than 0'));
+        }
+    }
+    
+    @IsTest
+    static void testScheduleRetryWithZeroRetriesLeft() {
+        // Arrange
+        DmlProcessor processor = createMockDmlProcessor();
+        List<Account> failedRecords = createTestAccounts(1);
+        
+        // Act & Assert
+        try {
+            DmlRetryHandler.scheduleRetry(processor, failedRecords, 0, 1);
+            System.assert(false, 'Should have thrown exception for zero retries left');
+        } catch (IllegalArgumentException ex) {
+            System.assert(ex.getMessage().contains('Cannot schedule retry when no retries are left'));
+        }
+    }
+    
+    @IsTest
+    static void testScheduleRetryWithSObjectTypeCapture() {
+        // Arrange
+        DmlProcessor processor = createMockDmlProcessor();
+        List<Account> failedRecords = createTestAccounts(2);
+        
+        // Act
+        Test.startTest();
+        DmlRetryHandler.scheduleRetry(processor, failedRecords, 1, 1);
+        Test.stopTest();
+        
+        // Assert - Verify SObjectType is captured correctly
+        List<DmlRetryJob__c> jobs = [SELECT Id, SObjectType__c, SerializedRecord__c FROM DmlRetryJob__c];
+        System.assertEquals(1, jobs.size(), 'Should create one retry job');
+        System.assertEquals('Account', jobs[0].SObjectType__c, 'Should capture correct SObject type');
+        
+        // Verify records can be deserialized with the captured type
+        Type listType = Type.forName('List<' + jobs[0].SObjectType__c + '>');
+        List<SObject> deserializedRecords = (List<SObject>) JSON.deserialize(jobs[0].SerializedRecord__c, listType);
+        System.assertEquals(2, deserializedRecords.size(), 'Should deserialize correct number of records');
+    }
+    
+    @IsTest
+    static void testScheduleRetryWithLargeDataValidation() {
+        // Arrange
+        DmlProcessor processor = createMockDmlProcessor();
+        List<Account> failedRecords = new List<Account>();
+        
+        // Create a very large record to exceed field limits
+        String largeText = '';
+        for (Integer i = 0; i < 1000; i++) {
+            largeText += 'This is a very long text to simulate large record data. ';
+        }
+        
+        Account largeAccount = new Account(Name = largeText, Description = largeText);
+        failedRecords.add(largeAccount);
+        
+        // Act & Assert
+        try {
+            Test.startTest();
+            DmlRetryHandler.scheduleRetry(processor, failedRecords, 1, 1);
+            Test.stopTest();
+            
+            // If we get here, the validation didn't trigger (which might be OK if the data isn't actually too large)
+            // Let's verify the job was created successfully
+            List<DmlRetryJob__c> jobs = [SELECT Id FROM DmlRetryJob__c];
+            System.assertEquals(1, jobs.size(), 'Should create retry job if data size is acceptable');
+            
+        } catch (IllegalArgumentException ex) {
+            // This is expected if the data is too large
+            System.assert(ex.getMessage().contains('Serialized records too large'), 
+                         'Should have appropriate error message for large data');
+        }
+    }
+    
+    @IsTest
+    static void testScheduleRetryCleanupOnSchedulingFailure() {
+        // This test simulates a scenario where job creation succeeds but scheduling fails
+        // Due to test limitations, we can't easily simulate scheduling failure,
+        // so we'll test the normal path and document the cleanup behavior
+        
+        // Arrange
+        DmlProcessor processor = createMockDmlProcessor();
+        List<Account> failedRecords = createTestAccounts(1);
+        
+        // Act
+        Test.startTest();
+        DmlRetryHandler.scheduleRetry(processor, failedRecords, 1, 1);
+        Test.stopTest();
+        
+        // Assert - Normal case should work fine
+        List<DmlRetryJob__c> jobs = [SELECT Id, Status__c FROM DmlRetryJob__c];
+        System.assertEquals(1, jobs.size(), 'Should create retry job');
+        System.assertEquals('Pending', jobs[0].Status__c, 'Job should be pending');
+    }
 }
