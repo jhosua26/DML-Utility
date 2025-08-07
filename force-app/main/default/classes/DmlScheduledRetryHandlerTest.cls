@@ -5,7 +5,7 @@
  * - Scheduled job execution
  * - Job status management
  * - Error handling during execution
- * - Integration with DmlUtility
+ * - Integration with DmlProcessor
  * 
  * @author DML Utility Team
  * @version 1.0
