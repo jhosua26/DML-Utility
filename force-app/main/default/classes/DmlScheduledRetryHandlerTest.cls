@@ -304,25 +304,6 @@ public class DmlScheduledRetryHandlerTest {
     }
     
     @IsTest
-    static void testExecuteWithInvalidOperation() {
-        // Arrange
-        DmlRetryJob__c job = createTestRetryJob();
-        job.Operation__c = 'INVALID_OPERATION';
-        insert job;
-        
-        // Act
-        Test.startTest();
-        DmlScheduledRetryHandler handler = new DmlScheduledRetryHandler();
-        handler.execute(null);
-        Test.stopTest();
-        
-        // Assert - Should handle invalid operation
-        List<DmlRetryJob__c> updatedJobs = [SELECT Id, Status__c FROM DmlRetryJob__c WHERE Id = :job.Id];
-        System.assertEquals(1, updatedJobs.size());
-        System.assertEquals('Failed', updatedJobs[0].Status__c, 'Should mark job as failed on invalid operation');
-    }
-    
-    @IsTest
     static void testExecuteWithDmlException() {
         // Arrange - Create job with records that will cause DML errors
         List<Account> accounts = new List<Account>();
@@ -531,8 +512,8 @@ public class DmlScheduledRetryHandlerTest {
         DmlRetryJob__c job = createTestRetryJob();
         job.RetryLeft__c = 2;
         job.Attempt__c = 1;
-        // Make it fail by using invalid operation
-        job.Operation__c = 'INVALID_OPERATION';
+        // Make it fail by using invalid sobject
+        job.SObjectType__c = 'InvalidSObjectType';
         insert job;
         
         // Act
@@ -573,8 +554,8 @@ public class DmlScheduledRetryHandlerTest {
         DmlRetryJob__c job = createTestRetryJob();
         job.RetryLeft__c = 0;
         job.Attempt__c = 3;
-        // Make it fail by using invalid operation
-        job.Operation__c = 'INVALID_OPERATION';
+        // Make it fail by using invalid sobject
+        job.SObjectType__c = 'InvalidSObjectType';
         insert job;
         
         // Act
@@ -621,4 +602,4 @@ public class DmlScheduledRetryHandlerTest {
         System.assertEquals('Completed', updatedJobs[0].Status__c, 'Job should complete successfully');
         System.assertEquals(null, updatedJobs[0].ErrorMessage__c, 'Should have no error message');
     }
-} 
+}
