@@ -16,6 +16,14 @@ public class DmlScheduledRetryHandler implements Schedulable {
         try {
             // Fix: Use type-safe deserialization instead of unsafe casting
             List<SObject> records = deserializeRecords(job.SerializedRecord__c, job.SObjectType__c);
+
+            // Handle empty records - complete successfully without processing
+            if (records.isEmpty()) {
+                job.Status__c = 'Completed';
+                job.ErrorMessage__c = null;
+                update job;
+                return;
+            }
             
             // Convert operation string to enum
             DmlOperationExecutor.Operation op = DmlOperationExecutor.Operation.valueOf(job.Operation__c);
@@ -65,8 +73,13 @@ public class DmlScheduledRetryHandler implements Schedulable {
             Type listType = Type.forName('List<' + sObjectType + '>');
             List<SObject> records = (List<SObject>) JSON.deserialize(serializedRecords, listType);
             
-            if (records == null || records.isEmpty()) {
-                throw new IllegalArgumentException('Deserialized records cannot be null or empty');
+            if (records == null) {
+                throw new IllegalArgumentException('Deserialized records cannot be null');
+            }
+            
+            // Empty records are allowed - they should complete successfully without processing
+            if (records.isEmpty()) {
+                return records;
             }
             
             return records;

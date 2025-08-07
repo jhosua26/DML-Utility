@@ -1,46 +1,6 @@
 public class DmlRetryHandler {
     
     /**
-     * Schedules a retry for DmlUtility (legacy support)
-     * @param originalJob The original DmlUtility job
-     * @param failedRecords Records that failed
-     * @param retryLeft Number of retries remaining
-     * @param attempt Current attempt number
-     */
-    public static void scheduleRetry(DmlUtility originalJob, List<SObject> failedRecords, Integer retryLeft, Integer attempt) {
-        // Validate input parameters
-        validateInputs(failedRecords, retryLeft, attempt);
-        
-        if (originalJob == null) {
-            throw new IllegalArgumentException('Original job cannot be null');
-        }
-
-        if (failedRecords.isEmpty()) {
-            return; // No point in scheduling retry for empty records
-        }
-        
-        if (failedRecords.isEmpty()) {
-            return; // No point in scheduling retry for empty records
-        }
-        
-        // Extract SObject type from failed records
-        String sObjectType = getSObjectType(failedRecords);
-        
-        // Use shared implementation
-        scheduleRetryInternal(
-            JSON.serialize(failedRecords),
-            String.valueOf(originalJob.operation),
-            originalJob.externalIdField,
-            sObjectType,
-            retryLeft,
-            attempt,
-            originalJob.isAsync,
-            originalJob.isLightweight,
-            originalJob.maxRetry
-        );
-    }
-    
-    /**
      * Schedules a retry for DmlProcessor
      * @param processor The DmlProcessor instance
      * @param failedRecords Records that failed
