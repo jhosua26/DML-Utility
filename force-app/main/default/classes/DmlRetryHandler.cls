@@ -15,6 +15,10 @@ public class DmlRetryHandler {
             throw new IllegalArgumentException('Original job cannot be null');
         }
         
+        if (failedRecords.isEmpty()) {
+            return; // No point in scheduling retry for empty records
+        }
+        
         // Extract SObject type from failed records
         String sObjectType = getSObjectType(failedRecords);
         
@@ -45,6 +49,10 @@ public class DmlRetryHandler {
         
         if (processor == null) {
             throw new IllegalArgumentException('Processor cannot be null');
+        }
+        
+        if (failedRecords.isEmpty()) {
+            return; // No point in scheduling retry for empty records
         }
         
         // Extract SObject type from failed records
@@ -124,10 +132,6 @@ public class DmlRetryHandler {
             throw new IllegalArgumentException('Failed records cannot be null');
         }
         
-        if (failedRecords.isEmpty()) {
-            return; // No point in scheduling retry for empty records - early return
-        }
-        
         if (retryLeft == null || retryLeft < 0) {
             throw new IllegalArgumentException('RetryLeft must be non-negative, got: ' + retryLeft);
         }
@@ -136,9 +140,7 @@ public class DmlRetryHandler {
             throw new IllegalArgumentException('Attempt must be greater than 0, got: ' + attempt);
         }
         
-        if (retryLeft == 0) {
-            throw new IllegalArgumentException('Cannot schedule retry when no retries are left');
-        }
+        // Note: We allow retryLeft == 0 for the final attempt, but warn that no further retries will be scheduled
     }
     
     /**
@@ -167,8 +169,8 @@ public class DmlRetryHandler {
         }
         
         // Check if the serialized data is too large for a Long Text Area field
-        // Assuming the field has a reasonable limit (e.g., 131,072 characters for Long Text Area)
-        Integer maxFieldSize = 131072; // Adjust based on your field configuration
+        // Using 32,768 as the standard Long Text Area limit (32KB)
+        Integer maxFieldSize = 32768; // Standard Long Text Area limit
         if (serializedRecords.length() > maxFieldSize) {
             throw new IllegalArgumentException(
                 'Serialized records too large (' + serializedRecords.length() + 
