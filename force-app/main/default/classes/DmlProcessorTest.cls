@@ -1406,7 +1406,7 @@ public class DmlProcessorTest {
         DmlProcessor processor = new DmlProcessor()
             .setRecords(accounts)
             .setOperation(DmlOperationExecutor.Operation.DO_INSERT)
-            .addValidator(new TestValidatorThatThrowsException());
+            .addValidator(new TestValidatorWithException());
         processor.runNow();
         Test.stopTest();
         
@@ -1681,8 +1681,8 @@ public class DmlProcessorTest {
         System.assertNotEquals(null, result1, 'DmlResult should be created');
         
         // Test constructor with SaveResult
-        Database.SaveResult saveResult = Database.insert(testAccount, false)[0];
-        DmlProcessor.DmlResult result2 = new DmlProcessor.DmlResult(testAccount, saveResult);
+        List<Database.SaveResult> saveResults = Database.insert(testAccount, false);
+        DmlProcessor.DmlResult result2 = new DmlProcessor.DmlResult(testAccount, saveResults[0]);
         System.assertEquals(true, result2.success, 'Should be successful');
         
         // Test constructor with errors
@@ -1703,7 +1703,7 @@ public class DmlProcessorTest {
     }
     
     // Additional test classes for coverage
-    public class TestValidatorThatThrowsException implements DmlProcessor.Validator {
+    public class TestValidatorWithException implements DmlProcessor.Validator {
         public void validate(List<SObject> records) {
             throw new DmlProcessor.DmlException('Validation failed for testing');
         }
@@ -1971,13 +1971,13 @@ public class DmlProcessorTest {
         insert testAccount;
         
         // Test constructor with SaveResult
-        Database.SaveResult saveResult = Database.update(testAccount, false)[0];
-        DmlProcessor.DmlResult result1 = new DmlProcessor.DmlResult(testAccount, saveResult);
+        List<Database.SaveResult> saveResults = Database.update(testAccount, false);
+        DmlProcessor.DmlResult result1 = new DmlProcessor.DmlResult(testAccount, saveResults[0]);
         System.assertEquals(true, result1.success, 'Should be successful');
         
         // Test constructor with DeleteResult
-        Database.DeleteResult deleteResult = Database.delete(testAccount, false)[0];
-        DmlProcessor.DmlResult result2 = new DmlProcessor.DmlResult(testAccount, deleteResult);
+        List<Database.DeleteResult> deleteResults = Database.delete(testAccount, false);
+        DmlProcessor.DmlResult result2 = new DmlProcessor.DmlResult(testAccount, deleteResults[0]);
         System.assertEquals(true, result2.success, 'Should be successful');
         
         // Test constructor with UpsertResult (would need upsert operation)
@@ -1987,8 +1987,8 @@ public class DmlProcessorTest {
             Industry = 'Technology',
             External_Id__c = 'EXT-TEST'
         );
-        Database.UpsertResult upsertResult = Database.upsert(upsertAccount, Account.External_Id__c, false)[0];
-        DmlProcessor.DmlResult result3 = new DmlProcessor.DmlResult(upsertAccount, upsertResult);
+        List<Database.UpsertResult> upsertResults = Database.upsert(upsertAccount, Account.External_Id__c, false);
+        DmlProcessor.DmlResult result3 = new DmlProcessor.DmlResult(upsertAccount, upsertResults[0]);
         System.assertEquals(true, result3.success, 'Should be successful');
         
         // Test constructor with errors
@@ -2003,8 +2003,6 @@ public class DmlProcessorTest {
         Account testAccount = new Account(Name = 'Test Account');
         List<Database.Error> errors = new List<Database.Error>();
         
-        // Create a mock error
-        Database.Error mockError = new Database.Error();
         // Note: Database.Error is a system class, so we can't create it directly
         // This test will cover the case where errors list is empty
         
