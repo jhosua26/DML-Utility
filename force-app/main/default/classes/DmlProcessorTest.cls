@@ -1406,7 +1406,7 @@ public class DmlProcessorTest {
         DmlProcessor processor = new DmlProcessor()
             .setRecords(accounts)
             .setOperation(DmlOperationExecutor.Operation.DO_INSERT)
-            .addValidator(new TestValidatorThrowsException());
+            .addValidator(new TestValidatorForExceptionTesting());
         processor.runNow();
         Test.stopTest();
         
@@ -1704,7 +1704,7 @@ public class DmlProcessorTest {
     }
     
     // Additional test classes for coverage
-    public class TestValidatorThrowsException implements DmlProcessor.Validator {
+    public class TestValidatorForExceptionTesting implements DmlProcessor.Validator {
         public void validate(List<SObject> records) {
             throw new DmlProcessor.DmlException('Validation failed for testing');
         }
