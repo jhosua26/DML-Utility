@@ -32,8 +32,8 @@ public class DmlScheduledRetryHandler implements Schedulable {
                 .setRecords(records)
                 .setOperation(op)
                 .setExternalId(job.ExternalIdField__c)
-                .withMaxRetry((Integer)(job.RetryLeft__c + job.Attempt__c))
-                .setAttempt((Integer) job.Attempt__c);
+                .withMaxRetry(Integer.valueOf(job.RetryLeft__c + job.Attempt__c))
+                .setAttempt(Integer.valueOf(job.Attempt__c));
 
             if (job.IsAsync__c) processor.runAsync();
             if (job.IsLightweight__c) processor.enableLightweightMode();
@@ -109,7 +109,7 @@ public class DmlScheduledRetryHandler implements Schedulable {
     private void scheduleRetryJob(DmlRetryJob__c failedJob, Exception originalException) {
         try {
             // Calculate retry delay with exponential backoff
-            Integer delaySeconds = calculateRetryDelay((Integer)failedJob.Attempt__c);
+            Integer delaySeconds = calculateRetryDelay(Integer.valueOf(failedJob.Attempt__c));
             Datetime runTime = Datetime.now().addSeconds(delaySeconds);
             String cron = getCronExpression(runTime);
             

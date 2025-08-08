@@ -115,6 +115,11 @@ public class DmlRetryHandler {
             throw new IllegalArgumentException('Cannot determine SObject type from empty records list');
         }
         
+        // Additional safety check - ensure first record is not null
+        if (records[0] == null) {
+            throw new IllegalArgumentException('First record in the list cannot be null');
+        }
+        
         // Get the SObject type from the first record
         SObjectType sObjectType = records[0].getSObjectType();
         if (sObjectType == null) {

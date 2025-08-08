@@ -181,6 +181,11 @@ public class DmlOperationExecutor {
             throw new IllegalArgumentException('Records cannot be null or empty for upsert operation.');
         }
         
+        // Additional safety check for null records
+        if (records[0] == null) {
+            throw new IllegalArgumentException('Records cannot contain null values for upsert operation.');
+        }
+        
         Schema.SObjectType objType = records[0].getSObjectType();
         Map<String, Schema.SObjectField> fieldsMap = objType.getDescribe().fields.getMap();
         
@@ -201,6 +206,11 @@ public class DmlOperationExecutor {
         
         if (records == null || records.isEmpty()) {
             throw new IllegalArgumentException('Records cannot be null or empty for upsert operation.');
+        }
+        
+        // Additional safety check for null records
+        if (records[0] == null) {
+            throw new IllegalArgumentException('Records cannot contain null values for upsert operation.');
         }
         
         Schema.SObjectType objType = records[0].getSObjectType();

@@ -98,6 +98,11 @@ public class DmlChunker {
             }
         }
         
+        // Additional safety check to ensure we have at least one record
+        if (records.isEmpty()) {
+            return;
+        }
+        
         Schema.SObjectType expectedType = records[0].getSObjectType();
         
         for (SObject record : records) {

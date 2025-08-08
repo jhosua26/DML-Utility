@@ -352,13 +352,16 @@ public class DmlProcessor implements Queueable {
                 scheduleRetry(chunk, ex);
             } else {
                 handleChunkFailure(chunk, ex);
-                // Add chunk to failed records if no retry (only if not already added)
-                this.failedRecords.addAll(chunk);
+                // Add chunk to failed records if no retry
+                // Check if records are not already in failed records to avoid duplicates
+                for (SObject record : chunk) {
+                    if (!this.failedRecords.contains(record)) {
+                        this.failedRecords.add(record);
+                    }
+                }
             }
         }
     }
-    
-
     
     /**
      * Handles logging when enabled
