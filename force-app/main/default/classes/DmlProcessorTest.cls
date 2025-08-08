@@ -2034,20 +2034,19 @@ public class DmlProcessorTest {
 
     @IsTest
     static void testHandleLightweightChunkFailureCoverage() {
-        // Arrange: Create invalid records (missing required field)
+        // Arrange: Create an Account with an invalid OwnerId (guaranteed to fail)
         List<Account> accounts = new List<Account>{
-            new Account(Name = null) // Name is required, will cause DML exception
+            new Account(Name = 'Should Fail', OwnerId = '005000000000000AAA') // Non-existent user
         };
         Test.startTest();
         DmlProcessor processor = new DmlProcessor()
             .setRecords(accounts)
             .setOperation(DmlOperationExecutor.Operation.DO_INSERT)
             .enableLightweightMode();
-        processor.executeDml(); // This should trigger handleLightweightChunkFailure
+        processor.executeDml(); // This should trigger failure
         Test.stopTest();
 
         // Assert: The failed record should be in failedRecords
         System.assertEquals(1, processor.getFailedRecords().size(), 'Failed record should be tracked in lightweight mode');
-        // Optionally, check context lightweight failure count if accessible
     }
 } 
