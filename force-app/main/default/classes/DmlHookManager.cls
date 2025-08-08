@@ -210,16 +210,40 @@ public class DmlHookManager {
             System.debug(LoggingLevel.WARN, errorMsg);
             context.log(errorMsg);
             
-            // Notify error callbacks
-            if (records != null) {
+            // Notify error callbacks efficiently
+            notifyErrorCallbacks(records, context, e);
+        } else {
+            throw new HookExecutionException('Hook failed: ' + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Efficiently notifies error callbacks about hook errors
+     * @param records The records being processed
+     * @param context The execution context
+     * @param e The exception that occurred
+     */
+    private void notifyErrorCallbacks(List<SObject> records, DmlContext context, Exception e) {
+        if (hookErrorCallbacks.isEmpty() || records == null || records.isEmpty()) {
+            return;
+        }
+        
+        try {
+            for (HookErrorCallback callback : hookErrorCallbacks) {
                 for (SObject record : records) {
-                    for (HookErrorCallback callback : hookErrorCallbacks) {
+                    try {
                         callback.onHookError(record, context, e);
+                    } catch (Exception callbackEx) {
+                        // Prevent callback errors from breaking the main flow
+                        System.debug(LoggingLevel.WARN, 'Error callback failed: ' + callbackEx.getMessage());
+                        if (context != null) {
+                            context.log('Error callback failed: ' + callbackEx.getMessage());
+                        }
                     }
                 }
             }
-        } else {
-            throw new HookExecutionException('Hook failed: ' + e.getMessage(), e);
+        } catch (Exception ex) {
+            System.debug(LoggingLevel.ERROR, 'Critical error in error callback processing: ' + ex.getMessage());
         }
     }
     
