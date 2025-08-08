@@ -328,9 +328,9 @@ public class DmlProcessor implements Queueable {
             DmlOperationExecutor.DmlOperationResult result = operationExecutor.execute(chunk, operation);
             lastResults.addAll(convertResults(result));
             
-            // Accumulate failed records
+            // Accumulate failed records (avoid duplicates)
             if (result.failedRecords != null && !result.failedRecords.isEmpty()) {
-                this.failedRecords.addAll(result.failedRecords);
+                addFailedRecordsNoDuplicates(result.failedRecords);
             }
             
             // Update context with error messages if any
@@ -352,13 +352,8 @@ public class DmlProcessor implements Queueable {
                 scheduleRetry(chunk, ex);
             } else {
                 handleChunkFailure(chunk, ex);
-                // Add chunk to failed records if no retry
-                // Check if records are not already in failed records to avoid duplicates
-                for (SObject record : chunk) {
-                    if (!this.failedRecords.contains(record)) {
-                        this.failedRecords.add(record);
-                    }
-                }
+                // Add chunk to failed records if no retry (avoid duplicates)
+                addFailedRecordsNoDuplicates(chunk);
             }
         }
     }
@@ -512,6 +507,29 @@ public class DmlProcessor implements Queueable {
         }
         
         return results;
+    }
+    
+    /**
+     * Adds failed records to the failed records list, avoiding duplicates
+     * @param recordsToAdd Records to add to failed records list
+     */
+    private void addFailedRecordsNoDuplicates(List<SObject> recordsToAdd) {
+        Set<Id> existingFailedIds = new Set<Id>();
+        for (SObject existingRecord : this.failedRecords) {
+            if (existingRecord.Id != null) {
+                existingFailedIds.add(existingRecord.Id);
+            }
+        }
+        
+        for (SObject record : recordsToAdd) {
+            // For records with IDs, check for duplicates. For new records (no ID), always add
+            if (record.Id == null || !existingFailedIds.contains(record.Id)) {
+                this.failedRecords.add(record);
+                if (record.Id != null) {
+                    existingFailedIds.add(record.Id);
+                }
+            }
+        }
     }
     
     /**
