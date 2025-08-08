@@ -443,6 +443,7 @@ public class DmlProcessor implements Queueable {
      */
     private void handleRetries(DmlOperationExecutor.DmlOperationResult result) {
         if (result.hasFailures && retryAttemptsLeft > 0 && isRetryWorthy(result)) {
+            retryAttemptsLeft--;
             scheduleRetry(result.failedRecords, null);
         }
     }
@@ -461,7 +462,7 @@ public class DmlProcessor implements Queueable {
      */
     private void scheduleRetry(List<SObject> failedRecords, Exception ex) {
         if (failedRecords != null && !failedRecords.isEmpty()) {
-            DmlRetryHandler.scheduleRetry(this, failedRecords, retryAttemptsLeft - 1, currentAttempt + 1);
+            DmlRetryHandler.scheduleRetry(this, failedRecords, retryAttemptsLeft, currentAttempt + 1);
         }
     }
     
@@ -485,7 +486,24 @@ public class DmlProcessor implements Queueable {
      */
     private List<DmlResult> convertResults(DmlOperationExecutor.DmlOperationResult result) {
         List<DmlResult> results = new List<DmlResult>();
-        // Implementation would convert the result format
+        
+        if (result == null || result.failedRecords == null) {
+            return results;
+        }
+        
+        // Convert failed records to DmlResult objects
+        for (SObject failedRecord : result.failedRecords) {
+            // Create a DmlResult with errors
+            DmlResult dmlResult = new DmlResult();
+            dmlResult.record = failedRecord;
+            dmlResult.success = false;
+            dmlResult.errors = new List<Database.Error>();
+            
+            // Note: We can't create Database.Error objects directly in Apex
+            // The errors will be handled through the error messages in the context
+            results.add(dmlResult);
+        }
+        
         return results;
     }
     

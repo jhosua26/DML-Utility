@@ -171,7 +171,6 @@ public class DmlContext {
             entry.HookSuppressed__c = hookSuppressed;
             entry.RetryAttempt__c = retryAttempt;
             
-            if (Test.isRunningTest()) return;
             entries.add(entry);
         }
 

@@ -23,6 +23,9 @@ public class DmlChunker {
      * @param chunkSize The size of each chunk
      */
     public DmlChunker(Integer chunkSize) {
+        if (chunkSize == null || chunkSize <= 0) {
+            throw new IllegalArgumentException('Chunk size must be greater than 0, got: ' + chunkSize);
+        }
         this.chunkSize = chunkSize;
     }
     
@@ -32,6 +35,9 @@ public class DmlChunker {
      * @return DmlChunker This instance for chaining
      */
     public DmlChunker setChunkSize(Integer chunkSize) {
+        if (chunkSize == null || chunkSize <= 0) {
+            throw new IllegalArgumentException('Chunk size must be greater than 0, got: ' + chunkSize);
+        }
         this.chunkSize = chunkSize;
         return this;
     }
