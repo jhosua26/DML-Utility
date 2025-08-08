@@ -1406,7 +1406,7 @@ public class DmlProcessorTest {
         DmlProcessor processor = new DmlProcessor()
             .setRecords(accounts)
             .setOperation(DmlOperationExecutor.Operation.DO_INSERT)
-            .addValidator(new TestValidatorWithException());
+            .addValidator(new TestValidatorThrowsException());
         processor.runNow();
         Test.stopTest();
         
@@ -1681,7 +1681,8 @@ public class DmlProcessorTest {
         System.assertNotEquals(null, result1, 'DmlResult should be created');
         
         // Test constructor with SaveResult
-        List<Database.SaveResult> saveResults = Database.insert(testAccount, false);
+        List<Account> accountsToInsert = new List<Account>{ testAccount };
+        List<Database.SaveResult> saveResults = Database.insert(accountsToInsert, false);
         DmlProcessor.DmlResult result2 = new DmlProcessor.DmlResult(testAccount, saveResults[0]);
         System.assertEquals(true, result2.success, 'Should be successful');
         
@@ -1703,7 +1704,7 @@ public class DmlProcessorTest {
     }
     
     // Additional test classes for coverage
-    public class TestValidatorWithException implements DmlProcessor.Validator {
+    public class TestValidatorThrowsException implements DmlProcessor.Validator {
         public void validate(List<SObject> records) {
             throw new DmlProcessor.DmlException('Validation failed for testing');
         }
@@ -1971,12 +1972,14 @@ public class DmlProcessorTest {
         insert testAccount;
         
         // Test constructor with SaveResult
-        List<Database.SaveResult> saveResults = Database.update(testAccount, false);
+        List<Account> accountsToUpdate = new List<Account>{ testAccount };
+        List<Database.SaveResult> saveResults = Database.update(accountsToUpdate, false);
         DmlProcessor.DmlResult result1 = new DmlProcessor.DmlResult(testAccount, saveResults[0]);
         System.assertEquals(true, result1.success, 'Should be successful');
         
         // Test constructor with DeleteResult
-        List<Database.DeleteResult> deleteResults = Database.delete(testAccount, false);
+        List<Account> accountsToDelete = new List<Account>{ testAccount };
+        List<Database.DeleteResult> deleteResults = Database.delete(accountsToDelete, false);
         DmlProcessor.DmlResult result2 = new DmlProcessor.DmlResult(testAccount, deleteResults[0]);
         System.assertEquals(true, result2.success, 'Should be successful');
         
@@ -1987,7 +1990,8 @@ public class DmlProcessorTest {
             Industry = 'Technology',
             External_Id__c = 'EXT-TEST'
         );
-        List<Database.UpsertResult> upsertResults = Database.upsert(upsertAccount, Account.External_Id__c, false);
+        List<Account> accountsToUpsert = new List<Account>{ upsertAccount };
+        List<Database.UpsertResult> upsertResults = Database.upsert(accountsToUpsert, Account.External_Id__c, false);
         DmlProcessor.DmlResult result3 = new DmlProcessor.DmlResult(upsertAccount, upsertResults[0]);
         System.assertEquals(true, result3.success, 'Should be successful');
         
