@@ -95,15 +95,15 @@ public class DmlContext {
      * @param failedRecords Failed records if any
      */
     public void setupLoggingContext(List<SObject> records, Operation operation, List<SObject> failedRecords) {
-        this.recordCount = records.size();
-        if (!records.isEmpty()) {
+        this.recordCount = records != null ? records.size() : 0;
+        if (records != null && !records.isEmpty()) {
             this.sObjectType = String.valueOf(records[0].getSObjectType());
         }
         this.operations = String.valueOf(operation);
         this.executionTime = DateTime.now();
-        this.success = failedRecords.isEmpty();
+        this.success = (failedRecords == null || failedRecords.isEmpty());
         
-        if (!failedRecords.isEmpty()) {
+        if (failedRecords != null && !failedRecords.isEmpty()) {
             this.failedRecordCount = failedRecords.size();
             this.firstErrorMessage = this.logDetails;
         }
