@@ -88,6 +88,11 @@ public class DmlProcessor implements Queueable {
         return this; 
     }
     
+    public DmlProcessor setAttempt(Integer attempt) {
+        this.currentAttempt = attempt;
+        return this;
+    }
+    
     public DmlProcessor withLogging() { 
         this.enableLogging = true; 
         return this; 
@@ -95,11 +100,6 @@ public class DmlProcessor implements Queueable {
     
     public DmlProcessor setChunkSize(Integer size) {
         this.chunker.setChunkSize(size);
-        return this;
-    }
-    
-    public DmlProcessor setAttempt(Integer attempt) {
-        this.currentAttempt = attempt;
         return this;
     }
     
@@ -203,7 +203,9 @@ public class DmlProcessor implements Queueable {
     
     // Entry points
     public void runNow() {
-        if (records == null || records.isEmpty()) return;
+        if (records == null || records.isEmpty()) {
+            throw new IllegalArgumentException('You must call setRecords() before execution.');
+        }
         
         if (isAsync) {
             System.enqueueJob(this);
@@ -294,6 +296,10 @@ public class DmlProcessor implements Queueable {
      * Validates before execution
      */
     private void validateBeforeRun() {
+        if (operation == null) {
+            throw new IllegalArgumentException('You must call setOperation() before execution.');
+        }
+        
         chunker.validateHomogeneousRecords(records);
         
         if (operation == DmlOperationExecutor.Operation.DO_UPSERT && String.isBlank(externalIdField)) {
@@ -322,9 +328,9 @@ public class DmlProcessor implements Queueable {
             DmlOperationExecutor.DmlOperationResult result = operationExecutor.execute(chunk, operation);
             lastResults.addAll(convertResults(result));
             
-            // Accumulate failed records
+            // Accumulate failed records (avoid duplicates)
             if (result.failedRecords != null && !result.failedRecords.isEmpty()) {
-                this.failedRecords.addAll(result.failedRecords);
+                addFailedRecordsNoDuplicates(result.failedRecords);
             }
             
             // Update context with error messages if any
@@ -346,13 +352,11 @@ public class DmlProcessor implements Queueable {
                 scheduleRetry(chunk, ex);
             } else {
                 handleChunkFailure(chunk, ex);
-                // Add chunk to failed records if no retry (only if not already added)
-                this.failedRecords.addAll(chunk);
+                // Add chunk to failed records if no retry (avoid duplicates)
+                addFailedRecordsNoDuplicates(chunk);
             }
         }
     }
-    
-
     
     /**
      * Handles logging when enabled
@@ -384,10 +388,14 @@ public class DmlProcessor implements Queueable {
         if (records == null || records.isEmpty()) {
             throw new IllegalArgumentException('You must call setRecords() before execution.');
         }
-        
+        initializeComponents();
         for (List<SObject> chunk : chunker.split(records)) {
             try {
-                operationExecutor.execute(chunk, operation);
+                DmlOperationExecutor.DmlOperationResult result = operationExecutor.execute(chunk, operation);
+                if (result.failedRecords != null && !result.failedRecords.isEmpty()) {
+                    failedRecords.addAll(result.failedRecords);
+                    if (context != null) context.incrementLightweightFailureCount();
+                }
             } catch (Exception e) {
                 handleLightweightChunkFailure(chunk, e);
             }
@@ -439,6 +447,7 @@ public class DmlProcessor implements Queueable {
      */
     private void handleRetries(DmlOperationExecutor.DmlOperationResult result) {
         if (result.hasFailures && retryAttemptsLeft > 0 && isRetryWorthy(result)) {
+            retryAttemptsLeft--;
             scheduleRetry(result.failedRecords, null);
         }
     }
@@ -457,7 +466,7 @@ public class DmlProcessor implements Queueable {
      */
     private void scheduleRetry(List<SObject> failedRecords, Exception ex) {
         if (failedRecords != null && !failedRecords.isEmpty()) {
-            DmlRetryHandler.scheduleRetry(this, failedRecords, retryAttemptsLeft - 1, currentAttempt + 1);
+            DmlRetryHandler.scheduleRetry(this, failedRecords, retryAttemptsLeft, currentAttempt + 1);
         }
     }
     
@@ -481,8 +490,46 @@ public class DmlProcessor implements Queueable {
      */
     private List<DmlResult> convertResults(DmlOperationExecutor.DmlOperationResult result) {
         List<DmlResult> results = new List<DmlResult>();
-        // Implementation would convert the result format
+        
+        if (result == null) {
+            return results;
+        }
+        
+        // Convert failed records to DmlResult objects
+        if (result.failedRecords != null && !result.failedRecords.isEmpty()) {
+            for (SObject failedRecord : result.failedRecords) {
+                DmlResult dmlResult = new DmlResult();
+                dmlResult.record = failedRecord;
+                dmlResult.success = false;
+                dmlResult.errors = new List<Database.Error>();
+                results.add(dmlResult);
+            }
+        }
+        
         return results;
+    }
+    
+    /**
+     * Adds failed records to the failed records list, avoiding duplicates
+     * @param recordsToAdd Records to add to failed records list
+     */
+    private void addFailedRecordsNoDuplicates(List<SObject> recordsToAdd) {
+        Set<Id> existingFailedIds = new Set<Id>();
+        for (SObject existingRecord : this.failedRecords) {
+            if (existingRecord.Id != null) {
+                existingFailedIds.add(existingRecord.Id);
+            }
+        }
+        
+        for (SObject record : recordsToAdd) {
+            // For records with IDs, check for duplicates. For new records (no ID), always add
+            if (record.Id == null || !existingFailedIds.contains(record.Id)) {
+                this.failedRecords.add(record);
+                if (record.Id != null) {
+                    existingFailedIds.add(record.Id);
+                }
+            }
+        }
     }
     
     /**

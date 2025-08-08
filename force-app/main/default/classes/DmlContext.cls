@@ -39,9 +39,6 @@ public class DmlContext {
     private String firstErrorMessage;
     private String logDetails = '';
     
-    // Internal log collection
-    private List<String> logLines = new List<String>();
-    
     /**
      * Default constructor
      */
@@ -66,7 +63,32 @@ public class DmlContext {
      * @param message The message to log
      */
     public void log(String message) {
-        logDetails += DateTime.now().format() + ' - ' + message + '\n';
+        if (String.isBlank(message)) {
+            return; // Don't log empty messages
+        }
+        
+        String timestampedMessage = DateTime.now().format() + ' - ' + message + '\n';
+        
+        // Prevent heap size issues by limiting log size (32KB limit for Long Text Area)
+        Integer maxLogSize = 30000; // Leave some buffer for other content
+        if (logDetails.length() + timestampedMessage.length() > maxLogSize) {
+            // Truncate older entries to make room for new ones
+            Integer truncateAt = maxLogSize - timestampedMessage.length();
+            if (truncateAt > 0) {
+                logDetails = logDetails.substring(logDetails.length() - truncateAt);
+                // Find the next newline to avoid cutting mid-message
+                Integer nextNewline = logDetails.indexOf('\n');
+                if (nextNewline > 0) {
+                    logDetails = '[...truncated...]\n' + logDetails.substring(nextNewline + 1);
+                }
+            } else {
+                // New message is too large, truncate it
+                logDetails = '[Message truncated due to size]\n' + timestampedMessage.substring(0, maxLogSize - 50);
+                return;
+            }
+        }
+        
+        logDetails += timestampedMessage;
     }
     
     /**
@@ -98,15 +120,15 @@ public class DmlContext {
      * @param failedRecords Failed records if any
      */
     public void setupLoggingContext(List<SObject> records, Operation operation, List<SObject> failedRecords) {
-        this.recordCount = records.size();
-        if (!records.isEmpty()) {
+        this.recordCount = records != null ? records.size() : 0;
+        if (records != null && !records.isEmpty()) {
             this.sObjectType = String.valueOf(records[0].getSObjectType());
         }
         this.operations = String.valueOf(operation);
         this.executionTime = DateTime.now();
-        this.success = failedRecords.isEmpty();
+        this.success = (failedRecords == null || failedRecords.isEmpty());
         
-        if (!failedRecords.isEmpty()) {
+        if (failedRecords != null && !failedRecords.isEmpty()) {
             this.failedRecordCount = failedRecords.size();
             this.firstErrorMessage = this.logDetails;
         }
@@ -171,7 +193,6 @@ public class DmlContext {
             entry.HookSuppressed__c = hookSuppressed;
             entry.RetryAttempt__c = retryAttempt;
             
-            if (Test.isRunningTest()) return;
             entries.add(entry);
         }
 

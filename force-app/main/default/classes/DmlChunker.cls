@@ -23,6 +23,9 @@ public class DmlChunker {
      * @param chunkSize The size of each chunk
      */
     public DmlChunker(Integer chunkSize) {
+        if (chunkSize == null || chunkSize <= 0) {
+            throw new IllegalArgumentException('Chunk size must be greater than 0, got: ' + chunkSize);
+        }
         this.chunkSize = chunkSize;
     }
     
@@ -32,6 +35,9 @@ public class DmlChunker {
      * @return DmlChunker This instance for chaining
      */
     public DmlChunker setChunkSize(Integer chunkSize) {
+        if (chunkSize == null || chunkSize <= 0) {
+            throw new IllegalArgumentException('Chunk size must be greater than 0, got: ' + chunkSize);
+        }
         this.chunkSize = chunkSize;
         return this;
     }
@@ -54,9 +60,9 @@ public class DmlChunker {
             return new List<List<SObject>>();
         }
         
-        // Handle invalid chunk sizes
+        // Validate chunk size is valid (should not happen due to constructor/setter validation, but defensive programming)
         if (chunkSize <= 0) {
-            return new List<List<SObject>>();
+            throw new IllegalArgumentException('Invalid chunk size: ' + chunkSize + '. Chunk size must be greater than 0.');
         }
         
         List<List<SObject>> chunks = new List<List<SObject>>();
@@ -85,6 +91,14 @@ public class DmlChunker {
             return;
         }
         
+        // Check for null records in the list
+        for (SObject record : records) {
+            if (record == null) {
+                throw new IllegalArgumentException('Records list cannot contain null elements.');
+            }
+        }
+        
+        // Get expected type from first record (we know it's not null from the loop above)
         Schema.SObjectType expectedType = records[0].getSObjectType();
         
         for (SObject record : records) {

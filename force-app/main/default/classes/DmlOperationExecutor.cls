@@ -173,16 +173,8 @@ public class DmlOperationExecutor {
      * @param records Records to validate
      */
     private void validateUpsertFields(List<SObject> records) {
-        if (String.isBlank(externalIdField)) {
-            throw new IllegalArgumentException('Missing External ID for upsert operation.');
-        }
-        
-        Schema.SObjectType objType = records[0].getSObjectType();
-        Map<String, Schema.SObjectField> fieldsMap = objType.getDescribe().fields.getMap();
-        
-        if (!fieldsMap.containsKey(externalIdField)) {
-            throw new IllegalArgumentException('Invalid External ID field: ' + externalIdField);
-        }
+        validateUpsertParameters(records);
+        validateExternalIdFieldExists(records);
     }
     
     /**
@@ -191,10 +183,36 @@ public class DmlOperationExecutor {
      * @return Schema.SObjectField The external ID field
      */
     private Schema.SObjectField getExternalIdField(List<SObject> records) {
+        validateUpsertParameters(records);
+        Map<String, Schema.SObjectField> fieldsMap = validateExternalIdFieldExists(records);
+        return fieldsMap.get(externalIdField);
+    }
+    
+    /**
+     * Validates common upsert parameters
+     * @param records Records to validate
+     */
+    private void validateUpsertParameters(List<SObject> records) {
         if (String.isBlank(externalIdField)) {
             throw new IllegalArgumentException('Missing External ID for upsert operation.');
         }
         
+        if (records == null || records.isEmpty()) {
+            throw new IllegalArgumentException('Records cannot be null or empty for upsert operation.');
+        }
+        
+        // Additional safety check for null records
+        if (records[0] == null) {
+            throw new IllegalArgumentException('Records cannot contain null values for upsert operation.');
+        }
+    }
+    
+    /**
+     * Validates that the external ID field exists on the SObject type
+     * @param records Records to validate against
+     * @return Map<String, Schema.SObjectField> The fields map for reuse
+     */
+    private Map<String, Schema.SObjectField> validateExternalIdFieldExists(List<SObject> records) {
         Schema.SObjectType objType = records[0].getSObjectType();
         Map<String, Schema.SObjectField> fieldsMap = objType.getDescribe().fields.getMap();
         
@@ -202,7 +220,7 @@ public class DmlOperationExecutor {
             throw new IllegalArgumentException('Invalid External ID field: ' + externalIdField);
         }
         
-        return fieldsMap.get(externalIdField);
+        return fieldsMap;
     }
     
     /**
