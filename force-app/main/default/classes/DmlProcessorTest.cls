@@ -2031,4 +2031,23 @@ public class DmlProcessorTest {
         Exception firstError = result.getFirstError();
         System.assertNotEquals(null, firstError, 'Should return an exception even with empty errors');
     }
+
+    @IsTest
+    static void testHandleLightweightChunkFailureCoverage() {
+        // Arrange: Create invalid records (missing required field)
+        List<Account> accounts = new List<Account>{
+            new Account(Name = null) // Name is required, will cause DML exception
+        };
+        Test.startTest();
+        DmlProcessor processor = new DmlProcessor()
+            .setRecords(accounts)
+            .setOperation(DmlOperationExecutor.Operation.DO_INSERT)
+            .enableLightweightMode();
+        processor.executeDml(); // This should trigger handleLightweightChunkFailure
+        Test.stopTest();
+
+        // Assert: The failed record should be in failedRecords
+        System.assertEquals(1, processor.getFailedRecords().size(), 'Failed record should be tracked in lightweight mode');
+        // Optionally, check context lightweight failure count if accessible
+    }
 } 
