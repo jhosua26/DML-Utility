@@ -387,43 +387,10 @@ public class DmlProcessor implements Queueable {
         initializeComponents();
         for (List<SObject> chunk : chunker.split(records)) {
             try {
-                // Determine operation type and process accordingly
-                if (operation == DmlOperationExecutor.Operation.DO_INSERT) {
-                    Database.SaveResult[] results = Database.insert(chunk, false);
-                    for (Integer i = 0; i < results.size(); i++) {
-                        if (!results[i].isSuccess()) {
-                            failedRecords.add(chunk[i]);
-                            if (context != null) context.incrementLightweightFailureCount();
-                        }
-                    }
-                } else if (operation == DmlOperationExecutor.Operation.DO_UPDATE) {
-                    Database.SaveResult[] results = Database.update(chunk, false);
-                    for (Integer i = 0; i < results.size(); i++) {
-                        if (!results[i].isSuccess()) {
-                            failedRecords.add(chunk[i]);
-                            if (context != null) context.incrementLightweightFailureCount();
-                        }
-                    }
-                } else if (operation == DmlOperationExecutor.Operation.DO_DELETE) {
-                    Database.DeleteResult[] results = Database.delete(chunk, false);
-                    for (Integer i = 0; i < results.size(); i++) {
-                        if (!results[i].isSuccess()) {
-                            failedRecords.add(chunk[i]);
-                            if (context != null) context.incrementLightweightFailureCount();
-                        }
-                    }
-                } else if (operation == DmlOperationExecutor.Operation.DO_UPSERT) {
-                    Schema.SObjectField extIdField = null;
-                    if (!String.isBlank(externalIdField)) {
-                        extIdField = chunk[0].getSObjectType().getDescribe().fields.getMap().get(externalIdField);
-                    }
-                    Database.UpsertResult[] results = Database.upsert(chunk, extIdField, false);
-                    for (Integer i = 0; i < results.size(); i++) {
-                        if (!results[i].isSuccess()) {
-                            failedRecords.add(chunk[i]);
-                            if (context != null) context.incrementLightweightFailureCount();
-                        }
-                    }
+                DmlOperationExecutor.DmlOperationResult result = operationExecutor.execute(chunk, operation);
+                if (result.failedRecords != null && !result.failedRecords.isEmpty()) {
+                    failedRecords.addAll(result.failedRecords);
+                    if (context != null) context.incrementLightweightFailureCount();
                 }
             } catch (Exception e) {
                 handleLightweightChunkFailure(chunk, e);
