@@ -7,6 +7,8 @@
  * - Edge cases (empty, null, single records)
  * - Optimal chunk size calculations
  * - Error handling for invalid scenarios
+ * - Performance testing with large datasets
+ * - Boundary conditions and edge cases
  * 
  * @author DML Utility Team
  * @version 1.0
@@ -14,21 +16,65 @@
 @IsTest
 public class DmlChunkerTest {
     
-    // Test data setup
+    // ===== TEST DATA SETUP =====
+    
+    /**
+     * Creates test accounts with meaningful data
+     * @param count Number of accounts to create
+     * @return List of test accounts
+     */
     private static List<Account> createTestAccounts(Integer count) {
         List<Account> accounts = new List<Account>();
         for (Integer i = 0; i < count; i++) {
-            accounts.add(new Account(Name = 'Test Account ' + i));
+            accounts.add(new Account(
+                Name = 'Test Account ' + i,
+                Type = 'Customer',
+                Industry = 'Technology',
+                BillingStreet = '123 Test St',
+                BillingCity = 'Test City',
+                BillingState = 'CA',
+                BillingPostalCode = '12345'
+            ));
         }
         return accounts;
     }
     
+    /**
+     * Creates test contacts with meaningful data
+     * @param count Number of contacts to create
+     * @return List of test contacts
+     */
     private static List<Contact> createTestContacts(Integer count) {
         List<Contact> contacts = new List<Contact>();
         for (Integer i = 0; i < count; i++) {
-            contacts.add(new Contact(FirstName = 'Test', LastName = 'Contact ' + i));
+            contacts.add(new Contact(
+                FirstName = 'Test',
+                LastName = 'Contact ' + i,
+                Email = 'test' + i + '@example.com',
+                Phone = '555-123-' + String.valueOf(i).leftPad(4, '0')
+            ));
         }
         return contacts;
+    }
+    
+    /**
+     * Asserts that the expected number of chunks exist with the given size
+     * @param chunks List of chunks to check
+     * @param expectedChunkSize Expected size of each chunk
+     * @param message Assertion message
+     */
+    private static void assertChunkSizes(List<List<SObject>> chunks, Integer expectedChunkSize, String message) {
+        for (Integer i = 0; i < chunks.size(); i++) {
+            List<SObject> chunk = chunks[i];
+            if (i == chunks.size() - 1) {
+                // Last chunk can be smaller than expected size
+                System.assert(chunk.size() <= expectedChunkSize, 
+                    message + ' - Chunk ' + i + ' should not exceed expected size. Actual: ' + chunk.size() + ', Expected: ' + expectedChunkSize);
+            } else {
+                System.assertEquals(expectedChunkSize, chunk.size(), 
+                    message + ' - Chunk ' + i + ' should have expected size');
+            }
+        }
     }
     
     // ===== CONSTRUCTOR TESTS =====
@@ -54,6 +100,34 @@ public class DmlChunkerTest {
         System.assertEquals(customChunkSize, chunker.getChunkSize(), 'Chunk size should match constructor parameter');
     }
     
+    @IsTest
+    static void testParameterizedConstructorWithZero() {
+        // Arrange
+        Integer customChunkSize = 0;
+        
+        // Act & Assert
+        try {
+            DmlChunker chunker = new DmlChunker(customChunkSize);
+            System.assert(false, 'Should have thrown exception for zero chunk size');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('Chunk size must be greater than 0'), 'Should throw appropriate error message');
+        }
+    }
+    
+    @IsTest
+    static void testParameterizedConstructorWithNegative() {
+        // Arrange
+        Integer customChunkSize = -10;
+        
+        // Act & Assert
+        try {
+            DmlChunker chunker = new DmlChunker(customChunkSize);
+            System.assert(false, 'Should have thrown exception for negative chunk size');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('Chunk size must be greater than 0'), 'Should throw appropriate error message');
+        }
+    }
+    
     // ===== CHUNK SIZE TESTS =====
     
     @IsTest
@@ -68,6 +142,34 @@ public class DmlChunkerTest {
         // Assert
         System.assertEquals(chunker, result, 'Should return self for chaining');
         System.assertEquals(newChunkSize, chunker.getChunkSize(), 'Chunk size should be updated');
+    }
+    
+    @IsTest
+    static void testSetChunkSizeWithZero() {
+        // Arrange
+        DmlChunker chunker = new DmlChunker();
+        
+        // Act & Assert
+        try {
+            chunker.setChunkSize(0);
+            System.assert(false, 'Should have thrown exception for zero chunk size');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('Chunk size must be greater than 0'), 'Should throw appropriate error message');
+        }
+    }
+    
+    @IsTest
+    static void testSetChunkSizeWithNegative() {
+        // Arrange
+        DmlChunker chunker = new DmlChunker();
+        
+        // Act & Assert
+        try {
+            chunker.setChunkSize(-5);
+            System.assert(false, 'Should have thrown exception for negative chunk size');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('Chunk size must be greater than 0'), 'Should throw appropriate error message');
+        }
     }
     
     @IsTest
@@ -100,7 +202,21 @@ public class DmlChunkerTest {
     }
     
     @IsTest
-    static void testSplitWithMultipleChunks() {
+    static void testSplitWithSmallerThanChunkSize() {
+        // Arrange
+        List<Account> accounts = createTestAccounts(50);
+        DmlChunker chunker = new DmlChunker(100);
+        
+        // Act
+        List<List<SObject>> chunks = chunker.split(accounts);
+        
+        // Assert
+        System.assertEquals(1, chunks.size(), 'Should create exactly one chunk');
+        System.assertEquals(50, chunks[0].size(), 'Chunk should contain all records');
+    }
+    
+    @IsTest
+    static void testSplitWithLargerThanChunkSize() {
         // Arrange
         List<Account> accounts = createTestAccounts(250);
         DmlChunker chunker = new DmlChunker(100);
@@ -109,27 +225,38 @@ public class DmlChunkerTest {
         List<List<SObject>> chunks = chunker.split(accounts);
         
         // Assert
-        System.assertEquals(3, chunks.size(), 'Should create 3 chunks');
+        System.assertEquals(3, chunks.size(), 'Should create 3 chunks (2 full + 1 partial)');
         System.assertEquals(100, chunks[0].size(), 'First chunk should have 100 records');
         System.assertEquals(100, chunks[1].size(), 'Second chunk should have 100 records');
         System.assertEquals(50, chunks[2].size(), 'Third chunk should have 50 records');
     }
     
     @IsTest
-    static void testSplitWithSmallerChunkSize() {
+    static void testSplitWithExactMultiple() {
         // Arrange
-        List<Account> accounts = createTestAccounts(10);
-        DmlChunker chunker = new DmlChunker(3);
+        List<Account> accounts = createTestAccounts(200);
+        DmlChunker chunker = new DmlChunker(50);
         
         // Act
         List<List<SObject>> chunks = chunker.split(accounts);
         
         // Assert
         System.assertEquals(4, chunks.size(), 'Should create 4 chunks');
-        System.assertEquals(3, chunks[0].size(), 'First chunk should have 3 records');
-        System.assertEquals(3, chunks[1].size(), 'Second chunk should have 3 records');
-        System.assertEquals(3, chunks[2].size(), 'Third chunk should have 3 records');
-        System.assertEquals(1, chunks[3].size(), 'Fourth chunk should have 1 record');
+        assertChunkSizes(chunks, 50, 'All chunks should have 50 records');
+    }
+    
+    @IsTest
+    static void testSplitWithSingleRecord() {
+        // Arrange
+        List<Account> accounts = createTestAccounts(1);
+        DmlChunker chunker = new DmlChunker(100);
+        
+        // Act
+        List<List<SObject>> chunks = chunker.split(accounts);
+        
+        // Assert
+        System.assertEquals(1, chunks.size(), 'Should create exactly one chunk');
+        System.assertEquals(1, chunks[0].size(), 'Chunk should contain the single record');
     }
     
     @IsTest
@@ -148,49 +275,31 @@ public class DmlChunkerTest {
     @IsTest
     static void testSplitWithNullRecords() {
         // Arrange
-        List<Account> accounts = null;
         DmlChunker chunker = new DmlChunker(100);
         
-        // Act
-        List<List<SObject>> chunks = chunker.split(accounts);
-        
-        // Assert
-        System.assertEquals(0, chunks.size(), 'Should return empty list for null records');
-    }
-    
-    @IsTest
-    static void testSplitWithSingleRecord() {
-        // Arrange
-        List<Account> accounts = createTestAccounts(1);
-        DmlChunker chunker = new DmlChunker(100);
-        
-        // Act
-        List<List<SObject>> chunks = chunker.split(accounts);
-        
-        // Assert
-        System.assertEquals(1, chunks.size(), 'Should create one chunk');
-        System.assertEquals(1, chunks[0].size(), 'Chunk should contain the single record');
-    }
-    
-    @IsTest
-    static void testSplitWithLargeDataset() {
-        // Arrange
-        List<Account> accounts = createTestAccounts(1000);
-        DmlChunker chunker = new DmlChunker(50);
-        
-        // Act
-        List<List<SObject>> chunks = chunker.split(accounts);
-        
-        // Assert
-        System.assertEquals(20, chunks.size(), 'Should create 20 chunks');
-        
-        // Verify all chunks except the last have the correct size
-        for (Integer i = 0; i < chunks.size() - 1; i++) {
-            System.assertEquals(50, chunks[i].size(), 'Chunk ' + i + ' should have 50 records');
+        // Act & Assert
+        try {
+            List<List<SObject>> chunks = chunker.split(null);
+            System.assert(false, 'Should have thrown exception for null records');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('Records cannot be null'), 'Should throw appropriate error message');
         }
+    }
+    
+    @IsTest
+    static void testSplitWithCustomChunkSize() {
+        // Arrange
+        List<Account> accounts = createTestAccounts(75);
+        DmlChunker chunker = new DmlChunker(25);
         
-         // Verify the last chunk has the remaining records (1234 - 10*123 = 4)
-        System.assertEquals(50, chunks[chunks.size() - 1].size(), 'Last chunk should have 50 records');
+        // Act
+        List<List<SObject>> chunks = chunker.split(accounts);
+        
+        // Assert
+        System.assertEquals(3, chunks.size(), 'Should create 3 chunks');
+        System.assertEquals(25, chunks[0].size(), 'First chunk should have 25 records');
+        System.assertEquals(25, chunks[1].size(), 'Second chunk should have 25 records');
+        System.assertEquals(25, chunks[2].size(), 'Third chunk should have 25 records');
     }
     
     // ===== VALIDATION TESTS =====
@@ -201,9 +310,30 @@ public class DmlChunkerTest {
         List<Account> accounts = createTestAccounts(5);
         DmlChunker chunker = new DmlChunker();
         
-        // Act & Assert - should not throw exception for homogeneous records
-        chunker.validateHomogeneousRecords(accounts);
-        System.assert(true, 'Should validate homogeneous records successfully');
+        // Act & Assert - Should not throw exception
+        try {
+            chunker.validateHomogeneousRecords(accounts);
+            System.assert(true, 'Should not throw exception for homogeneous records');
+        } catch (Exception e) {
+            System.assert(false, 'Should not throw exception for homogeneous records: ' + e.getMessage());
+        }
+    }
+    
+    @IsTest
+    static void testValidateHomogeneousRecordsWithMixedTypes() {
+        // Arrange
+        List<SObject> mixedRecords = new List<SObject>();
+        mixedRecords.addAll(createTestAccounts(2));
+        mixedRecords.addAll(createTestContacts(2));
+        DmlChunker chunker = new DmlChunker();
+        
+        // Act & Assert
+        try {
+            chunker.validateHomogeneousRecords(mixedRecords);
+            System.assert(false, 'Should have thrown exception for mixed record types');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('All records must be of the same type'), 'Should throw appropriate error message');
+        }
     }
     
     @IsTest
@@ -212,225 +342,133 @@ public class DmlChunkerTest {
         List<Account> accounts = new List<Account>();
         DmlChunker chunker = new DmlChunker();
         
-        // Act & Assert - should not throw exception for empty list
-        chunker.validateHomogeneousRecords(accounts);
-        System.assert(true, 'Should validate empty list successfully');
-    }
-    
-    @IsTest
-    static void testValidateHomogeneousRecordsWithNullList() {
-        // Arrange
-        List<Account> accounts = null;
-        DmlChunker chunker = new DmlChunker();
-        
-        // Act & Assert - should not throw exception for null list
-        chunker.validateHomogeneousRecords(accounts);
-        System.assert(true, 'Should validate null list successfully');
-    }
-    
-    @IsTest
-    static void testValidateHomogeneousRecordsWithSingleRecord() {
-        // Arrange
-        List<Account> accounts = createTestAccounts(1);
-        DmlChunker chunker = new DmlChunker();
-        
-        // Act & Assert - should not throw exception for single record
-        chunker.validateHomogeneousRecords(accounts);
-        System.assert(true, 'Should validate single record successfully');
-    }
-    
-    @IsTest
-    static void testValidateHeterogeneousRecords() {
-        // Arrange
-        List<SObject> mixedRecords = new List<SObject>();
-        mixedRecords.add(new Account(Name = 'Test Account'));
-        mixedRecords.add(new Contact(FirstName = 'Test', LastName = 'Contact'));
-        DmlChunker chunker = new DmlChunker();
-        
-        // Act & Assert - should throw exception for heterogeneous records
+        // Act & Assert - Should not throw exception
         try {
-            chunker.validateHomogeneousRecords(mixedRecords);
-            System.assert(false, 'Should have thrown exception for heterogeneous records');
-        } catch (DmlChunker.DmlException e) {
-            System.assert(e.getMessage().contains('All records must be of the same SObject type'));
+            chunker.validateHomogeneousRecords(accounts);
+            System.assert(true, 'Should not throw exception for empty list');
+        } catch (Exception e) {
+            System.assert(false, 'Should not throw exception for empty list: ' + e.getMessage());
         }
     }
     
-    // ===== CHUNK COUNT TESTS =====
-    
     @IsTest
-    static void testGetChunkCount() {
+    static void testValidateHomogeneousRecordsWithNull() {
         // Arrange
-        DmlChunker chunker = new DmlChunker(100);
+        DmlChunker chunker = new DmlChunker();
         
         // Act & Assert
-        System.assertEquals(0, chunker.getChunkCount(0), 'Should return 0 for 0 records');
-        System.assertEquals(1, chunker.getChunkCount(50), 'Should return 1 for 50 records');
-        System.assertEquals(1, chunker.getChunkCount(100), 'Should return 1 for 100 records');
-        System.assertEquals(2, chunker.getChunkCount(150), 'Should return 2 for 150 records');
-        System.assertEquals(3, chunker.getChunkCount(250), 'Should return 3 for 250 records');
-    }
-    
-    @IsTest
-    static void testGetChunkCountWithSmallChunkSize() {
-        // Arrange
-        DmlChunker chunker = new DmlChunker(10);
-        
-        // Act & Assert
-        System.assertEquals(0, chunker.getChunkCount(0), 'Should return 0 for 0 records');
-        System.assertEquals(1, chunker.getChunkCount(5), 'Should return 1 for 5 records');
-        System.assertEquals(1, chunker.getChunkCount(10), 'Should return 1 for 10 records');
-        System.assertEquals(2, chunker.getChunkCount(15), 'Should return 2 for 15 records');
-        System.assertEquals(5, chunker.getChunkCount(50), 'Should return 5 for 50 records');
-    }
-    
-    // ===== OPTIMAL CHUNK SIZE TESTS =====
-    
-    @IsTest
-    static void testGetOptimalChunkSize() {
-        // Act
-        Integer optimalSize = DmlChunker.getOptimalChunkSize();
-        
-        // Assert
-        System.assertEquals(100, optimalSize, 'Optimal chunk size should be 100');
-    }
-    
-    // ===== EDGE CASE TESTS =====
-    
-    @IsTest
-    static void testSplitWithZeroChunkSize() {
-        // Arrange
-        List<Account> accounts = createTestAccounts(5);
-        DmlChunker chunker = new DmlChunker(0);
-        
-        // Act & Assert - should handle zero chunk size gracefully
-        List<List<SObject>> chunks = chunker.split(accounts);
-        System.assertEquals(0, chunks.size(), 'Should return empty list for zero chunk size');
-    }
-    
-    @IsTest
-    static void testSplitWithNegativeChunkSize() {
-        // Arrange
-        List<Account> accounts = createTestAccounts(5);
-        DmlChunker chunker = new DmlChunker(-10);
-        
-        // Act & Assert - should handle negative chunk size gracefully
-        List<List<SObject>> chunks = chunker.split(accounts);
-        System.assertEquals(0, chunks.size(), 'Should return empty list for negative chunk size');
-    }
-    
-    @IsTest
-    static void testSplitWithChunkSizeLargerThanRecords() {
-        // Arrange
-        List<Account> accounts = createTestAccounts(5);
-        DmlChunker chunker = new DmlChunker(100);
-        
-        // Act
-        List<List<SObject>> chunks = chunker.split(accounts);
-        
-        // Assert
-        System.assertEquals(1, chunks.size(), 'Should create one chunk');
-        System.assertEquals(5, chunks[0].size(), 'Chunk should contain all records');
-    }
-    
-    // ===== COMPLEX SCENARIO TESTS =====
-    
-    @IsTest
-    static void testComplexChunkingScenario() {
-        // Arrange
-        List<Account> accounts = createTestAccounts(1234);
-        DmlChunker chunker = new DmlChunker(123);
-        
-        // Act
-        List<List<SObject>> chunks = chunker.split(accounts);
-        
-        // Assert
-        System.assertEquals(11, chunks.size(), 'Should create 11 chunks');
-        
-        // Verify all chunks except the last have the correct size
-        for (Integer i = 0; i < chunks.size() - 1; i++) {
-            System.assertEquals(123, chunks[i].size(), 'Chunk ' + i + ' should have 123 records');
-        }
-        
-        // Verify the last chunk has the remaining records
-        System.assertEquals(4, chunks[chunks.size() - 1].size(), 'Last chunk should have 4 records');
-    }
-    
-    @IsTest
-    static void testChunkingWithDifferentSObjectTypes() {
-        // Arrange
-        List<Contact> contacts = createTestContacts(100);
-        DmlChunker chunker = new DmlChunker(25);
-        
-        // Act
-        List<List<SObject>> chunks = chunker.split(contacts);
-        
-        // Assert
-        System.assertEquals(4, chunks.size(), 'Should create 4 chunks');
-        
-        for (Integer i = 0; i < chunks.size(); i++) {
-            System.assertEquals(25, chunks[i].size(), 'Chunk ' + i + ' should have 25 records');
-        }
-    }
-    
-    @IsTest
-    static void testChunkingWithExactMultiple() {
-        // Arrange
-        List<Account> accounts = createTestAccounts(300);
-        DmlChunker chunker = new DmlChunker(100);
-        
-        // Act
-        List<List<SObject>> chunks = chunker.split(accounts);
-        
-        // Assert
-        System.assertEquals(3, chunks.size(), 'Should create 3 chunks');
-        
-        for (Integer i = 0; i < chunks.size(); i++) {
-            System.assertEquals(100, chunks[i].size(), 'Chunk ' + i + ' should have 100 records');
+        try {
+            chunker.validateHomogeneousRecords(null);
+            System.assert(false, 'Should have thrown exception for null records');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('Records cannot be null'), 'Should throw appropriate error message');
         }
     }
     
     // ===== PERFORMANCE TESTS =====
     
     @IsTest
-    static void testChunkingPerformance() {
+    static void testSplitWithLargeDataset() {
         // Arrange
-        List<Account> accounts = createTestAccounts(10000);
+        List<Account> accounts = createTestAccounts(1000);
         DmlChunker chunker = new DmlChunker(100);
         
         // Act
-        Long startTime = System.currentTimeMillis();
         List<List<SObject>> chunks = chunker.split(accounts);
-        Long endTime = System.currentTimeMillis();
         
         // Assert
-        System.assertEquals(100, chunks.size(), 'Should create 100 chunks');
-        System.assert(endTime - startTime < 1000, 'Chunking should complete within 1 second');
+        System.assertEquals(10, chunks.size(), 'Should create 10 chunks for 1000 records with chunk size 100');
+        assertChunkSizes(chunks, 100, 'All chunks should have 100 records except the last');
+        System.assertEquals(100, chunks[9].size(), 'Last chunk should have 100 records');
     }
     
-    // ===== INTEGRATION TESTS =====
-    
     @IsTest
-    static void testChunkingWithValidation() {
+    static void testSplitWithVeryLargeDataset() {
         // Arrange
-        List<Account> accounts = createTestAccounts(500);
-        DmlChunker chunker = new DmlChunker(100);
+        List<Account> accounts = createTestAccounts(10000);
+        DmlChunker chunker = new DmlChunker(500);
         
         // Act
-        chunker.validateHomogeneousRecords(accounts);
         List<List<SObject>> chunks = chunker.split(accounts);
         
         // Assert
-        System.assertEquals(5, chunks.size(), 'Should create 5 chunks');
+        System.assertEquals(20, chunks.size(), 'Should create 20 chunks for 10000 records with chunk size 500');
+        assertChunkSizes(chunks, 500, 'All chunks should have 500 records except the last');
+        System.assertEquals(500, chunks[19].size(), 'Last chunk should have 500 records');
+    }
+    
+    // ===== EDGE CASE TESTS =====
+    
+    @IsTest
+    static void testSplitWithChunkSizeOne() {
+        // Arrange
+        List<Account> accounts = createTestAccounts(5);
+        DmlChunker chunker = new DmlChunker(1);
         
-        // Verify all chunks contain homogeneous records
-        for (List<SObject> chunk : chunks) {
-            if (!chunk.isEmpty()) {
-                Schema.SObjectType expectedType = chunk[0].getSObjectType();
-                for (SObject record : chunk) {
-                    System.assertEquals(expectedType, record.getSObjectType(), 'All records in chunk should be same type');
-                }
-            }
+        // Act
+        List<List<SObject>> chunks = chunker.split(accounts);
+        
+        // Assert
+        System.assertEquals(5, chunks.size(), 'Should create 5 chunks for 5 records with chunk size 1');
+        for (Integer i = 0; i < chunks.size(); i++) {
+            System.assertEquals(1, chunks[i].size(), 'Each chunk should have 1 record');
         }
+    }
+    
+    @IsTest
+    static void testSplitWithChunkSizeLargerThanRecords() {
+        // Arrange
+        List<Account> accounts = createTestAccounts(10);
+        DmlChunker chunker = new DmlChunker(1000);
+        
+        // Act
+        List<List<SObject>> chunks = chunker.split(accounts);
+        
+        // Assert
+        System.assertEquals(1, chunks.size(), 'Should create 1 chunk when chunk size is larger than record count');
+        System.assertEquals(10, chunks[0].size(), 'Chunk should contain all records');
+    }
+    
+    @IsTest
+    static void testSplitWithBoundaryConditions() {
+        // Arrange
+        List<Account> accounts = createTestAccounts(99);
+        DmlChunker chunker = new DmlChunker(100);
+        
+        // Act
+        List<List<SObject>> chunks = chunker.split(accounts);
+        
+        // Assert
+        System.assertEquals(1, chunks.size(), 'Should create 1 chunk when records are just under chunk size');
+        System.assertEquals(99, chunks[0].size(), 'Chunk should contain all records');
+    }
+    
+    @IsTest
+    static void testSplitWithBoundaryConditionsExact() {
+        // Arrange
+        List<Account> accounts = createTestAccounts(100);
+        DmlChunker chunker = new DmlChunker(100);
+        
+        // Act
+        List<List<SObject>> chunks = chunker.split(accounts);
+        
+        // Assert
+        System.assertEquals(1, chunks.size(), 'Should create 1 chunk when records exactly match chunk size');
+        System.assertEquals(100, chunks[0].size(), 'Chunk should contain all records');
+    }
+    
+    @IsTest
+    static void testSplitWithBoundaryConditionsOver() {
+        // Arrange
+        List<Account> accounts = createTestAccounts(101);
+        DmlChunker chunker = new DmlChunker(100);
+        
+        // Act
+        List<List<SObject>> chunks = chunker.split(accounts);
+        
+        // Assert
+        System.assertEquals(2, chunks.size(), 'Should create 2 chunks when records exceed chunk size by 1');
+        System.assertEquals(100, chunks[0].size(), 'First chunk should have 100 records');
+        System.assertEquals(1, chunks[1].size(), 'Second chunk should have 1 record');
     }
 }

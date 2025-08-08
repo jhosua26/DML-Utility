@@ -7,6 +7,9 @@
  * - Operation tracking
  * - Error handling and statistics
  * - Log object creation and management
+ * - Performance monitoring
+ * - Context cloning and copying
+ * - Edge cases and error conditions
  * 
  * @author DML Utility Team
  * @version 1.0
@@ -14,13 +17,56 @@
 @IsTest
 public class DmlContextTest {
     
-    // Test data setup
+    // ===== TEST DATA SETUP =====
+    
+    /**
+     * Creates test accounts with meaningful data
+     * @param count Number of accounts to create
+     * @return List of test accounts
+     */
     private static List<Account> createTestAccounts(Integer count) {
         List<Account> accounts = new List<Account>();
         for (Integer i = 0; i < count; i++) {
-            accounts.add(new Account(Name = 'Test Account ' + i));
+            accounts.add(new Account(
+                Name = 'Test Account ' + i,
+                Type = 'Customer',
+                Industry = 'Technology',
+                BillingStreet = '123 Test St',
+                BillingCity = 'Test City',
+                BillingState = 'CA',
+                BillingPostalCode = '12345'
+            ));
         }
         return accounts;
+    }
+    
+    /**
+     * Creates test contacts with meaningful data
+     * @param count Number of contacts to create
+     * @return List of test contacts
+     */
+    private static List<Contact> createTestContacts(Integer count) {
+        List<Contact> contacts = new List<Contact>();
+        for (Integer i = 0; i < count; i++) {
+            contacts.add(new Contact(
+                FirstName = 'Test',
+                LastName = 'Contact ' + i,
+                Email = 'test' + i + '@example.com',
+                Phone = '555-123-' + String.valueOf(i).leftPad(4, '0')
+            ));
+        }
+        return contacts;
+    }
+    
+    /**
+     * Asserts that the expected number of accounts exist with the given name pattern
+     * @param expectedCount Expected number of accounts
+     * @param namePattern Name pattern to search for
+     * @param message Assertion message
+     */
+    private static void assertAccountCount(Integer expectedCount, String namePattern, String message) {
+        Integer actualCount = [SELECT COUNT() FROM Account WHERE Name LIKE :namePattern];
+        System.assertEquals(expectedCount, actualCount, message);
     }
     
     // ===== CONSTRUCTOR TESTS =====
@@ -32,10 +78,12 @@ public class DmlContextTest {
         
         // Assert
         System.assertNotEquals(null, context, 'Context should not be null');
-        System.assertEquals(null, context.getOperation());
-        System.assertEquals(null, context.getExternalIdField());
-        System.assertEquals(0, context.getTotalRetries());
-        System.assertEquals(0, context.getRetryAttempt());
+        System.assertEquals(null, context.getOperation(), 'Operation should be null by default');
+        System.assertEquals(null, context.getExternalIdField(), 'External ID field should be null by default');
+        System.assertEquals(0, context.getTotalRetries(), 'Total retries should be 0 by default');
+        System.assertEquals(0, context.getRetryAttempt(), 'Retry attempt should be 0 by default');
+        System.assertEquals(false, context.getIsLightweight(), 'Is lightweight should be false by default');
+        System.assertEquals(0, context.getLightweightFailureCount(), 'Lightweight failure count should be 0 by default');
     }
     
     @IsTest
@@ -50,10 +98,28 @@ public class DmlContextTest {
         DmlContext context = new DmlContext(operation, externalIdField, totalRetries, retryAttempt);
         
         // Assert
-        System.assertEquals(operation, context.getOperation());
-        System.assertEquals(externalIdField, context.getExternalIdField());
-        System.assertEquals(totalRetries, context.getTotalRetries());
-        System.assertEquals(retryAttempt, context.getRetryAttempt());
+        System.assertEquals(operation, context.getOperation(), 'Operation should match constructor parameter');
+        System.assertEquals(externalIdField, context.getExternalIdField(), 'External ID field should match constructor parameter');
+        System.assertEquals(totalRetries, context.getTotalRetries(), 'Total retries should match constructor parameter');
+        System.assertEquals(retryAttempt, context.getRetryAttempt(), 'Retry attempt should match constructor parameter');
+    }
+    
+    @IsTest
+    static void testParameterizedConstructorWithNullValues() {
+        // Arrange
+        DmlContext.Operation operation = null;
+        String externalIdField = null;
+        Integer totalRetries = null;
+        Integer retryAttempt = null;
+        
+        // Act
+        DmlContext context = new DmlContext(operation, externalIdField, totalRetries, retryAttempt);
+        
+        // Assert
+        System.assertEquals(null, context.getOperation(), 'Operation should be null when passed null');
+        System.assertEquals(null, context.getExternalIdField(), 'External ID field should be null when passed null');
+        System.assertEquals(0, context.getTotalRetries(), 'Total retries should be 0 when passed null');
+        System.assertEquals(0, context.getRetryAttempt(), 'Retry attempt should be 0 when passed null');
     }
     
     // ===== LOGGING TESTS =====
@@ -79,15 +145,51 @@ public class DmlContextTest {
         DmlContext context = new DmlContext();
         String message1 = 'First log message';
         String message2 = 'Second log message';
+        String message3 = 'Third log message';
         
         // Act
         context.log(message1);
         context.log(message2);
+        context.log(message3);
         
         // Assert
         String logDetails = context.getLogDetails();
         System.assert(logDetails.contains(message1), 'Log details should contain first message');
         System.assert(logDetails.contains(message2), 'Log details should contain second message');
+        System.assert(logDetails.contains(message3), 'Log details should contain third message');
+        
+        // Verify order (newer messages should appear later)
+        Integer index1 = logDetails.indexOf(message1);
+        Integer index2 = logDetails.indexOf(message2);
+        Integer index3 = logDetails.indexOf(message3);
+        System.assert(index1 < index2, 'First message should appear before second message');
+        System.assert(index2 < index3, 'Second message should appear before third message');
+    }
+    
+    @IsTest
+    static void testLogMethodWithNullMessage() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        
+        // Act
+        context.log(null);
+        
+        // Assert
+        String logDetails = context.getLogDetails();
+        System.assert(String.isNotBlank(logDetails), 'Log details should not be blank even with null message');
+    }
+    
+    @IsTest
+    static void testLogMethodWithEmptyMessage() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        
+        // Act
+        context.log('');
+        
+        // Assert
+        String logDetails = context.getLogDetails();
+        System.assert(String.isNotBlank(logDetails), 'Log details should not be blank even with empty message');
     }
     
     // ===== OPERATION TYPE TESTS =====
@@ -102,46 +204,226 @@ public class DmlContextTest {
         String operationType = context.getOperationType();
         
         // Assert
-        System.assertEquals('DO_INSERT', operationType);
+        System.assertEquals('DO_INSERT', operationType, 'Operation type should be DO_INSERT');
     }
     
     @IsTest
-    static void testGetOperationTypeForUpdate() {
+    static void testGetOperationTypeWithNullOperation() {
         // Arrange
         DmlContext context = new DmlContext();
-        context.setOperation(DmlContext.Operation.DO_UPDATE);
         
         // Act
         String operationType = context.getOperationType();
         
         // Assert
-        System.assertEquals('DO_UPDATE', operationType);
+        System.assertEquals(null, operationType, 'Operation type should be null when operation is null');
     }
     
     @IsTest
-    static void testGetOperationTypeForDelete() {
+    static void testSetOperation() {
         // Arrange
         DmlContext context = new DmlContext();
-        context.setOperation(DmlContext.Operation.DO_DELETE);
+        DmlContext.Operation operation = DmlContext.Operation.DO_UPDATE;
         
         // Act
-        String operationType = context.getOperationType();
+        context.setOperation(operation);
         
         // Assert
-        System.assertEquals('DO_DELETE', operationType);
+        System.assertEquals(operation, context.getOperation(), 'Operation should be set correctly');
+        System.assertEquals('DO_UPDATE', context.getOperationType(), 'Operation type should be DO_UPDATE');
     }
     
     @IsTest
-    static void testGetOperationTypeForUpsert() {
+    static void testSetOperationWithNull() {
         // Arrange
         DmlContext context = new DmlContext();
-        context.setOperation(DmlContext.Operation.DO_UPSERT);
+        context.setOperation(DmlContext.Operation.DO_INSERT);
         
         // Act
-        String operationType = context.getOperationType();
+        context.setOperation(null);
         
         // Assert
-        System.assertEquals('DO_UPSERT', operationType);
+        System.assertEquals(null, context.getOperation(), 'Operation should be null when set to null');
+        System.assertEquals(null, context.getOperationType(), 'Operation type should be null when operation is null');
+    }
+    
+    // ===== EXTERNAL ID FIELD TESTS =====
+    
+    @IsTest
+    static void testSetExternalIdField() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        String externalIdField = 'Custom_External_Id__c';
+        
+        // Act
+        context.setExternalIdField(externalIdField);
+        
+        // Assert
+        System.assertEquals(externalIdField, context.getExternalIdField(), 'External ID field should be set correctly');
+    }
+    
+    @IsTest
+    static void testSetExternalIdFieldWithNull() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        context.setExternalIdField('Some_Field__c');
+        
+        // Act
+        context.setExternalIdField(null);
+        
+        // Assert
+        System.assertEquals(null, context.getExternalIdField(), 'External ID field should be null when set to null');
+    }
+    
+    // ===== RETRY TESTS =====
+    
+    @IsTest
+    static void testSetTotalRetries() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        Integer totalRetries = 5;
+        
+        // Act
+        context.setTotalRetries(totalRetries);
+        
+        // Assert
+        System.assertEquals(totalRetries, context.getTotalRetries(), 'Total retries should be set correctly');
+    }
+    
+    @IsTest
+    static void testSetRetryAttempt() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        Integer retryAttempt = 2;
+        
+        // Act
+        context.setRetryAttempt(retryAttempt);
+        
+        // Assert
+        System.assertEquals(retryAttempt, context.getRetryAttempt(), 'Retry attempt should be set correctly');
+    }
+    
+    @IsTest
+    static void testSetRetryAttempt1() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        
+        // Act
+        context.setRetryAttempt(5);
+        
+        // Assert
+        System.assertEquals(5, context.getRetryAttempt(), 'Retry attempt should be set to 5');
+    }
+    
+    @IsTest
+    static void testSetRetryAttemptToZero() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        context.setRetryAttempt(3);
+        
+        // Act
+        context.setRetryAttempt(0);
+        
+        // Assert
+        System.assertEquals(0, context.getRetryAttempt(), 'Retry attempt should be set to 0');
+    }
+    
+    // ===== LIGHTWEIGHT MODE TESTS =====
+    
+    @IsTest
+    static void testSetIsLightweight() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        
+        // Act
+        context.setIsLightweight(true);
+        
+        // Assert
+        System.assertEquals(true, context.getIsLightweight(), 'Is lightweight should be set to true');
+    }
+    
+    @IsTest
+    static void testIncrementLightweightFailureCount() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        
+        // Act
+        context.incrementLightweightFailureCount();
+        context.incrementLightweightFailureCount();
+        context.incrementLightweightFailureCount();
+        
+        // Assert
+        System.assertEquals(3, context.getLightweightFailureCount(), 'Lightweight failure count should be 3');
+    }
+    
+    @IsTest
+    static void testIncrementLightweightFailureCountFromZero() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        
+        // Act
+        context.incrementLightweightFailureCount();
+        
+        // Assert
+        System.assertEquals(1, context.getLightweightFailureCount(), 'Lightweight failure count should be 1 when incremented from 0');
+    }
+    
+    // ===== LOG DETAILS TESTS =====
+    
+    @IsTest
+    static void testGetLogDetails() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        String message1 = 'First message';
+        String message2 = 'Second message';
+        
+        // Act
+        context.log(message1);
+        context.log(message2);
+        String logDetails = context.getLogDetails();
+        
+        // Assert
+        System.assert(String.isNotBlank(logDetails), 'Log details should not be blank');
+        System.assert(logDetails.contains(message1), 'Log details should contain first message');
+        System.assert(logDetails.contains(message2), 'Log details should contain second message');
+    }
+    
+    @IsTest
+    static void testGetLogDetailsWithNoLogs() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        
+        // Act
+        String logDetails = context.getLogDetails();
+        
+        // Assert
+        System.assert(String.isBlank(logDetails), 'Log details should be blank when no logs have been added');
+    }
+    
+    @IsTest
+    static void testSetLogDetails() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        String customLogDetails = 'Custom log details for testing';
+        
+        // Act
+        context.setLogDetails(customLogDetails);
+        
+        // Assert
+        System.assertEquals(customLogDetails, context.getLogDetails(), 'Log details should be set correctly');
+    }
+    
+    @IsTest
+    static void testSetLogDetailsWithNull() {
+        // Arrange
+        DmlContext context = new DmlContext();
+        context.setLogDetails('Some log details');
+        
+        // Act
+        context.setLogDetails(null);
+        
+        // Assert
+        System.assertEquals(null, context.getLogDetails(), 'Log details should be null when set to null');
     }
     
     // ===== COUNTER TESTS =====
@@ -160,7 +442,7 @@ public class DmlContextTest {
     }
     
     @IsTest
-    static void testIncrementLightweightFailureCount() {
+    static void testIncrementLightweightFailureCount1() {
         // Arrange
         DmlContext context = new DmlContext();
         

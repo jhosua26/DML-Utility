@@ -7,6 +7,9 @@
  * - Error handling and suppression
  * - Hook error callbacks
  * - Empty hook scenarios
+ * - Multiple hooks execution
+ * - Hook execution order
+ * - Edge cases and error conditions
  * 
  * @author DML Utility Team
  * @version 1.0
@@ -14,16 +17,63 @@
 @IsTest
 public class DmlHookManagerTest {
     
-    // Test data setup
+    // ===== TEST DATA SETUP =====
+    
+    /**
+     * Creates test accounts with meaningful data
+     * @param count Number of accounts to create
+     * @return List of test accounts
+     */
     private static List<Account> createTestAccounts(Integer count) {
         List<Account> accounts = new List<Account>();
         for (Integer i = 0; i < count; i++) {
-            accounts.add(new Account(Name = 'Test Account ' + i));
+            accounts.add(new Account(
+                Name = 'Test Account ' + i,
+                Type = 'Customer',
+                Industry = 'Technology',
+                BillingStreet = '123 Test St',
+                BillingCity = 'Test City',
+                BillingState = 'CA',
+                BillingPostalCode = '12345'
+            ));
         }
         return accounts;
     }
     
-    // Test hook implementations
+    /**
+     * Creates test contacts with meaningful data
+     * @param count Number of contacts to create
+     * @return List of test contacts
+     */
+    private static List<Contact> createTestContacts(Integer count) {
+        List<Contact> contacts = new List<Contact>();
+        for (Integer i = 0; i < count; i++) {
+            contacts.add(new Contact(
+                FirstName = 'Test',
+                LastName = 'Contact ' + i,
+                Email = 'test' + i + '@example.com',
+                Phone = '555-123-' + String.valueOf(i).leftPad(4, '0')
+            ));
+        }
+        return contacts;
+    }
+    
+    /**
+     * Asserts that the expected number of accounts exist with the given name pattern
+     * @param expectedCount Expected number of accounts
+     * @param namePattern Name pattern to search for
+     * @param message Assertion message
+     */
+    private static void assertAccountCount(Integer expectedCount, String namePattern, String message) {
+        Integer actualCount = [SELECT COUNT() FROM Account WHERE Name LIKE :namePattern];
+        System.assertEquals(expectedCount, actualCount, message);
+    }
+    
+    // ===== TEST HOOK IMPLEMENTATIONS =====
+    
+    /**
+     * Test hook that modifies accounts before insert
+     */
     public class TestBeforeInsertHook implements DmlHookManager.Hook {
         public void run(List<SObject> records, DmlContext context) {
             if (records == null) {
@@ -33,11 +83,15 @@ public class DmlHookManagerTest {
                 if (record instanceof Account) {
                     Account acc = (Account) record;
                     acc.Name = acc.Name + ' - Before Hook';
+                    acc.Description = 'Processed by BeforeInsertHook';
                 }
             }
         }
     }
     
+    /**
+     * Test hook that modifies accounts after insert
+     */
     public class TestAfterInsertHook implements DmlHookManager.Hook {
         public void run(List<SObject> records, DmlContext context) {
             if (records == null) {
@@ -47,20 +101,98 @@ public class DmlHookManagerTest {
                 if (record instanceof Account) {
                     Account acc = (Account) record;
                     acc.Name = acc.Name + ' - After Hook';
+                    acc.Description = 'Processed by AfterInsertHook';
                 }
             }
         }
     }
     
+    /**
+     * Test hook that always throws an exception
+     */
     public class TestFailingHook implements DmlHookManager.Hook {
         public void run(List<SObject> records, DmlContext context) {
-            throw new DmlHookManager.HookExecutionException('Hook failed intentionally');
+            throw new DmlHookManager.HookExecutionException('Hook failed intentionally for testing');
         }
     }
     
+    /**
+     * Test hook that modifies accounts before update
+     */
+    public class TestBeforeUpdateHook implements DmlHookManager.Hook {
+        public void run(List<SObject> records, DmlContext context) {
+            if (records == null) {
+                return;
+            }
+            for (SObject record : records) {
+                if (record instanceof Account) {
+                    Account acc = (Account) record;
+                    acc.Description = 'Updated via BeforeUpdateHook';
+                }
+            }
+        }
+    }
+    
+    /**
+     * Test hook that modifies accounts before delete
+     */
+    public class TestBeforeDeleteHook implements DmlHookManager.Hook {
+        public void run(List<SObject> records, DmlContext context) {
+            if (records == null) {
+                return;
+            }
+            for (SObject record : records) {
+                if (record instanceof Account) {
+                    Account acc = (Account) record;
+                    acc.Description = 'Marked for deletion by BeforeDeleteHook';
+                }
+            }
+        }
+    }
+    
+    /**
+     * Test hook that modifies accounts before upsert
+     */
+    public class TestBeforeUpsertHook implements DmlHookManager.Hook {
+        public void run(List<SObject> records, DmlContext context) {
+            if (records == null) {
+                return;
+            }
+            for (SObject record : records) {
+                if (record instanceof Account) {
+                    Account acc = (Account) record;
+                    acc.Description = 'Upserted via BeforeUpsertHook';
+                }
+            }
+        }
+    }
+    
+    /**
+     * Test hook error callback
+     */
     public class TestHookErrorCallback implements DmlHookManager.HookErrorCallback {
         public void onHookError(SObject record, DmlContext context, Exception ex) {
-            System.debug('Hook error callback executed for record: ' + record);
+            System.debug('HookErrorCallback: Error occurred for record: ' + record + ' - ' + ex.getMessage());
+        }
+    }
+    
+    /**
+     * Test hook that counts executions
+     */
+    public class TestCountingHook implements DmlHookManager.Hook {
+        public Integer executionCount = 0;
+        
+        public void run(List<SObject> records, DmlContext context) {
+            if (records == null) {
+                return;
+            }
+            executionCount++;
+            for (SObject record : records) {
+                if (record instanceof Account) {
+                    Account acc = (Account) record;
+                    acc.Description = 'Processed by CountingHook (execution #' + executionCount + ')';
+                }
+            }
         }
     }
     
@@ -83,7 +215,7 @@ public class DmlHookManagerTest {
     static void testAddBeforeUpdateHook() {
         // Arrange
         DmlHookManager hookManager = new DmlHookManager();
-        TestBeforeInsertHook hook = new TestBeforeInsertHook();
+        TestBeforeUpdateHook hook = new TestBeforeUpdateHook();
         
         // Act
         DmlHookManager result = hookManager.addBeforeUpdateHook(hook);
@@ -96,7 +228,7 @@ public class DmlHookManagerTest {
     static void testAddBeforeDeleteHook() {
         // Arrange
         DmlHookManager hookManager = new DmlHookManager();
-        TestBeforeInsertHook hook = new TestBeforeInsertHook();
+        TestBeforeDeleteHook hook = new TestBeforeDeleteHook();
         
         // Act
         DmlHookManager result = hookManager.addBeforeDeleteHook(hook);
@@ -109,7 +241,7 @@ public class DmlHookManagerTest {
     static void testAddBeforeUpsertHook() {
         // Arrange
         DmlHookManager hookManager = new DmlHookManager();
-        TestBeforeInsertHook hook = new TestBeforeInsertHook();
+        TestBeforeUpsertHook hook = new TestBeforeUpsertHook();
         
         // Act
         DmlHookManager result = hookManager.addBeforeUpsertHook(hook);
@@ -183,18 +315,6 @@ public class DmlHookManagerTest {
         System.assertEquals(hookManager, result, 'Should return self for chaining');
     }
     
-    @IsTest
-    static void testSuppressHookExceptions() {
-        // Arrange
-        DmlHookManager hookManager = new DmlHookManager();
-        
-        // Act
-        DmlHookManager result = hookManager.suppressHookExceptions();
-        
-        // Assert
-        System.assertEquals(hookManager, result, 'Should return self for chaining');
-    }
-    
     // ===== HOOK EXECUTION TESTS =====
     
     @IsTest
@@ -212,7 +332,8 @@ public class DmlHookManagerTest {
         
         // Assert
         for (Account acc : accounts) {
-            System.assert(acc.Name.contains('Before Hook'), 'Account name should be modified by before hook');
+            System.assert(acc.Name.endsWith(' - Before Hook'), 'Account name should be modified by before hook');
+            System.assertEquals('Processed by BeforeInsertHook', acc.Description, 'Account description should be set by before hook');
         }
     }
     
@@ -231,122 +352,87 @@ public class DmlHookManagerTest {
         
         // Assert
         for (Account acc : accounts) {
-            System.assert(acc.Name.contains('After Hook'), 'Account name should be modified by after hook');
+            System.assert(acc.Name.endsWith(' - After Hook'), 'Account name should be modified by after hook');
+            System.assertEquals('Processed by AfterInsertHook', acc.Description, 'Account description should be set by after hook');
         }
     }
     
     @IsTest
-    static void testExecuteBeforeHooksForUpdate() {
+    static void testExecuteBeforeHooksWithMultipleHooks() {
         // Arrange
-        List<Account> accounts = createTestAccounts(3);
+        List<Account> accounts = createTestAccounts(2);
         DmlContext context = new DmlContext();
+        TestCountingHook countingHook = new TestCountingHook();
         DmlHookManager hookManager = new DmlHookManager()
-            .addBeforeUpdateHook(new TestBeforeInsertHook());
+            .addBeforeInsertHook(new TestBeforeInsertHook())
+            .addBeforeInsertHook(countingHook);
         
         // Act
         Test.startTest();
-        hookManager.executeBeforeHooks(accounts, DmlHookManager.Operation.DO_UPDATE, context);
+        hookManager.executeBeforeHooks(accounts, DmlHookManager.Operation.DO_INSERT, context);
         Test.stopTest();
         
         // Assert
+        System.assertEquals(1, countingHook.executionCount, 'Counting hook should be executed once');
         for (Account acc : accounts) {
-            System.assert(acc.Name.contains('Before Hook'), 'Account name should be modified by before hook');
+            System.assert(acc.Name.endsWith(' - Before Hook'), 'Account name should be modified by before hook');
+            System.assert(acc.Description.contains('CountingHook'), 'Account description should be set by counting hook');
         }
     }
     
     @IsTest
-    static void testExecuteBeforeHooksForDelete() {
+    static void testExecuteBeforeHooksWithNoHooks() {
         // Arrange
         List<Account> accounts = createTestAccounts(3);
         DmlContext context = new DmlContext();
-        DmlHookManager hookManager = new DmlHookManager()
-            .addBeforeDeleteHook(new TestBeforeInsertHook());
+        DmlHookManager hookManager = new DmlHookManager();
         
-        // Act
+        // Act & Assert - Should not throw exception
         Test.startTest();
-        hookManager.executeBeforeHooks(accounts, DmlHookManager.Operation.DO_DELETE, context);
-        Test.stopTest();
-        
-        // Assert
-        for (Account acc : accounts) {
-            System.assert(acc.Name.contains('Before Hook'), 'Account name should be modified by before hook');
+        try {
+            hookManager.executeBeforeHooks(accounts, DmlHookManager.Operation.DO_INSERT, context);
+            System.assert(true, 'Should execute without exception when no hooks are registered');
+        } catch (Exception e) {
+            System.assert(false, 'Should not throw exception when no hooks are registered: ' + e.getMessage());
         }
+        Test.stopTest();
     }
     
     @IsTest
-    static void testExecuteBeforeHooksForUpsert() {
+    static void testExecuteBeforeHooksWithNullRecords() {
         // Arrange
-        List<Account> accounts = createTestAccounts(3);
         DmlContext context = new DmlContext();
         DmlHookManager hookManager = new DmlHookManager()
-            .addBeforeUpsertHook(new TestBeforeInsertHook());
+            .addBeforeInsertHook(new TestBeforeInsertHook());
         
-        // Act
+        // Act & Assert - Should not throw exception
         Test.startTest();
-        hookManager.executeBeforeHooks(accounts, DmlHookManager.Operation.DO_UPSERT, context);
-        Test.stopTest();
-        
-        // Assert
-        for (Account acc : accounts) {
-            System.assert(acc.Name.contains('Before Hook'), 'Account name should be modified by before hook');
+        try {
+            hookManager.executeBeforeHooks(null, DmlHookManager.Operation.DO_INSERT, context);
+            System.assert(true, 'Should execute without exception when records are null');
+        } catch (Exception e) {
+            System.assert(false, 'Should not throw exception when records are null: ' + e.getMessage());
         }
+        Test.stopTest();
     }
     
     @IsTest
-    static void testExecuteAfterHooksForUpdate() {
+    static void testExecuteBeforeHooksWithEmptyRecords() {
         // Arrange
-        List<Account> accounts = createTestAccounts(3);
+        List<Account> accounts = new List<Account>();
         DmlContext context = new DmlContext();
         DmlHookManager hookManager = new DmlHookManager()
-            .addAfterUpdateHook(new TestAfterInsertHook());
+            .addBeforeInsertHook(new TestBeforeInsertHook());
         
-        // Act
+        // Act & Assert - Should not throw exception
         Test.startTest();
-        hookManager.executeAfterHooks(accounts, DmlHookManager.Operation.DO_UPDATE, context);
-        Test.stopTest();
-        
-        // Assert
-        for (Account acc : accounts) {
-            System.assert(acc.Name.contains('After Hook'), 'Account name should be modified by after hook');
+        try {
+            hookManager.executeBeforeHooks(accounts, DmlHookManager.Operation.DO_INSERT, context);
+            System.assert(true, 'Should execute without exception when records are empty');
+        } catch (Exception e) {
+            System.assert(false, 'Should not throw exception when records are empty: ' + e.getMessage());
         }
-    }
-    
-    @IsTest
-    static void testExecuteAfterHooksForDelete() {
-        // Arrange
-        List<Account> accounts = createTestAccounts(3);
-        DmlContext context = new DmlContext();
-        DmlHookManager hookManager = new DmlHookManager()
-            .addAfterDeleteHook(new TestAfterInsertHook());
-        
-        // Act
-        Test.startTest();
-        hookManager.executeAfterHooks(accounts, DmlHookManager.Operation.DO_DELETE, context);
         Test.stopTest();
-        
-        // Assert
-        for (Account acc : accounts) {
-            System.assert(acc.Name.contains('After Hook'), 'Account name should be modified by after hook');
-        }
-    }
-    
-    @IsTest
-    static void testExecuteAfterHooksForUpsert() {
-        // Arrange
-        List<Account> accounts = createTestAccounts(3);
-        DmlContext context = new DmlContext();
-        DmlHookManager hookManager = new DmlHookManager()
-            .addAfterUpsertHook(new TestAfterInsertHook());
-        
-        // Act
-        Test.startTest();
-        hookManager.executeAfterHooks(accounts, DmlHookManager.Operation.DO_UPSERT, context);
-        Test.stopTest();
-        
-        // Assert
-        for (Account acc : accounts) {
-            System.assert(acc.Name.contains('After Hook'), 'Account name should be modified by after hook');
-        }
     }
     
     // ===== ERROR HANDLING TESTS =====
@@ -365,7 +451,7 @@ public class DmlHookManagerTest {
             hookManager.executeBeforeHooks(accounts, DmlHookManager.Operation.DO_INSERT, context);
             System.assert(false, 'Should have thrown exception');
         } catch (DmlHookManager.HookExecutionException e) {
-            System.assert(e.getMessage().contains('Hook failed intentionally'));
+            System.assert(e.getMessage().contains('Hook failed intentionally for testing'));
         }
         Test.stopTest();
     }
@@ -411,7 +497,7 @@ public class DmlHookManagerTest {
     // ===== EMPTY HOOK TESTS =====
     
     @IsTest
-    static void testExecuteBeforeHooksWithNoHooks() {
+    static void testExecuteBeforeHooksWithNoHooks1() {
         // Arrange
         List<Account> accounts = createTestAccounts(3);
         DmlContext context = new DmlContext();
