@@ -39,9 +39,6 @@ public class DmlContext {
     private String firstErrorMessage;
     private String logDetails = '';
     
-    // Internal log collection
-    private List<String> logLines = new List<String>();
-    
     /**
      * Default constructor
      */

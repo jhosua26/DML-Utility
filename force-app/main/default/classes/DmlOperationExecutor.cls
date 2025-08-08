@@ -177,6 +177,10 @@ public class DmlOperationExecutor {
             throw new IllegalArgumentException('Missing External ID for upsert operation.');
         }
         
+        if (records == null || records.isEmpty()) {
+            throw new IllegalArgumentException('Records cannot be null or empty for upsert operation.');
+        }
+        
         Schema.SObjectType objType = records[0].getSObjectType();
         Map<String, Schema.SObjectField> fieldsMap = objType.getDescribe().fields.getMap();
         
@@ -193,6 +197,10 @@ public class DmlOperationExecutor {
     private Schema.SObjectField getExternalIdField(List<SObject> records) {
         if (String.isBlank(externalIdField)) {
             throw new IllegalArgumentException('Missing External ID for upsert operation.');
+        }
+        
+        if (records == null || records.isEmpty()) {
+            throw new IllegalArgumentException('Records cannot be null or empty for upsert operation.');
         }
         
         Schema.SObjectType objType = records[0].getSObjectType();

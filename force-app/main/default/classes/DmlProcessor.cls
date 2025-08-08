@@ -203,7 +203,9 @@ public class DmlProcessor implements Queueable {
     
     // Entry points
     public void runNow() {
-        if (records == null || records.isEmpty()) return;
+        if (records == null || records.isEmpty()) {
+            throw new IllegalArgumentException('You must call setRecords() before execution.');
+        }
         
         if (isAsync) {
             System.enqueueJob(this);
@@ -294,6 +296,10 @@ public class DmlProcessor implements Queueable {
      * Validates before execution
      */
     private void validateBeforeRun() {
+        if (operation == null) {
+            throw new IllegalArgumentException('You must call setOperation() before execution.');
+        }
+        
         chunker.validateHomogeneousRecords(records);
         
         if (operation == DmlOperationExecutor.Operation.DO_UPSERT && String.isBlank(externalIdField)) {
@@ -487,21 +493,19 @@ public class DmlProcessor implements Queueable {
     private List<DmlResult> convertResults(DmlOperationExecutor.DmlOperationResult result) {
         List<DmlResult> results = new List<DmlResult>();
         
-        if (result == null || result.failedRecords == null) {
+        if (result == null) {
             return results;
         }
         
         // Convert failed records to DmlResult objects
-        for (SObject failedRecord : result.failedRecords) {
-            // Create a DmlResult with errors
-            DmlResult dmlResult = new DmlResult();
-            dmlResult.record = failedRecord;
-            dmlResult.success = false;
-            dmlResult.errors = new List<Database.Error>();
-            
-            // Note: We can't create Database.Error objects directly in Apex
-            // The errors will be handled through the error messages in the context
-            results.add(dmlResult);
+        if (result.failedRecords != null && !result.failedRecords.isEmpty()) {
+            for (SObject failedRecord : result.failedRecords) {
+                DmlResult dmlResult = new DmlResult();
+                dmlResult.record = failedRecord;
+                dmlResult.success = false;
+                dmlResult.errors = new List<Database.Error>();
+                results.add(dmlResult);
+            }
         }
         
         return results;

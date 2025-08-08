@@ -50,7 +50,7 @@ public class DmlScheduledRetryHandler implements Schedulable {
                 
                 // If retries are left, reschedule the job
                 if (job.RetryLeft__c > 0) {
-                    scheduleRetryJob(job, new DmlException('DML operation failed for ' + failedRecords.size() + ' record(s)'));
+                    scheduleRetryJob(job, new DmlProcessor.DmlException('DML operation failed for ' + failedRecords.size() + ' record(s)'));
                 }
             } else {
                 // All records succeeded

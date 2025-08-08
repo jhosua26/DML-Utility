@@ -91,6 +91,13 @@ public class DmlChunker {
             return;
         }
         
+        // Check for null records in the list
+        for (SObject record : records) {
+            if (record == null) {
+                throw new IllegalArgumentException('Records list cannot contain null elements.');
+            }
+        }
+        
         Schema.SObjectType expectedType = records[0].getSObjectType();
         
         for (SObject record : records) {

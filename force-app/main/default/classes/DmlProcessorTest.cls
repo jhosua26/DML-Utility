@@ -998,28 +998,33 @@ public class DmlProcessorTest {
         // Arrange
         List<Account> accounts = new List<Account>();
         
-        // Act
+        // Act & Assert
         Test.startTest();
-        DmlProcessor processor = new DmlProcessor()
-            .setRecords(accounts)
-            .setOperation(DmlOperationExecutor.Operation.DO_INSERT);
-        processor.runNow();
+        try {
+            DmlProcessor processor = new DmlProcessor()
+                .setRecords(accounts)
+                .setOperation(DmlOperationExecutor.Operation.DO_INSERT);
+            processor.runNow();
+            System.assert(false, 'Should have thrown exception for empty records');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('You must call setRecords() before execution'), 'Should throw appropriate error message');
+        }
         Test.stopTest();
-        
-        // Assert - should not throw exception for empty records
-        System.assert(true, 'Should handle empty records gracefully');
     }
     
     @IsTest
     static void testNullRecords() {
         // Act & Assert
         Test.startTest();
-        DmlProcessor processor = new DmlProcessor()
-            .setOperation(DmlOperationExecutor.Operation.DO_INSERT);
-        // Don't set records - runNow() will return early for null/empty records
-        processor.runNow();
-        // This should not throw an exception because runNow() returns early
-        System.assert(true, 'No exception thrown for null records (early return in runNow)');
+        try {
+            DmlProcessor processor = new DmlProcessor()
+                .setOperation(DmlOperationExecutor.Operation.DO_INSERT);
+            // Don't set records - runNow() should now throw exception
+            processor.runNow();
+            System.assert(false, 'Should have thrown exception for null records');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('You must call setRecords() before execution'), 'Should throw appropriate error message');
+        }
         Test.stopTest();
     }
     
@@ -1033,13 +1038,11 @@ public class DmlProcessorTest {
         try {
             DmlProcessor processor = new DmlProcessor()
                 .setRecords(accounts);
-            // Don't set operation - current implementation doesn't validate this
+            // Don't set operation - should now throw exception
             processor.executeDml();
-            // Should not throw exception since operation validation is not implemented
-            System.assert(true, 'No exception thrown for missing operation (current implementation)');
-        } catch (Exception e) {
-            // If an exception is thrown, that's also acceptable
-            System.assert(true, 'Exception thrown for missing operation');
+            System.assert(false, 'Should have thrown exception for missing operation');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('You must call setOperation() before execution'), 'Should throw appropriate error message');
         }
         Test.stopTest();
     }
@@ -1574,10 +1577,10 @@ public class DmlProcessorTest {
         // Act & Assert
         Test.startTest();
         try {
-            processor.runNow(); // This should not throw since runNow() returns early for null records
-            System.assert(true, 'Should handle null records gracefully');
-        } catch (Exception e) {
-            System.assert(false, 'Should not throw exception for null records in runNow()');
+            processor.runNow(); // Should now throw exception for null records
+            System.assert(false, 'Should have thrown exception for null records');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('You must call setRecords() before execution'), 'Should throw appropriate error message');
         }
         Test.stopTest();
     }
@@ -1592,10 +1595,10 @@ public class DmlProcessorTest {
         // Act & Assert
         Test.startTest();
         try {
-            processor.runNow(); // This should not throw since runNow() returns early for empty records
-            System.assert(true, 'Should handle empty records gracefully');
-        } catch (Exception e) {
-            System.assert(false, 'Should not throw exception for empty records in runNow()');
+            processor.runNow(); // Should now throw exception for empty records
+            System.assert(false, 'Should have thrown exception for empty records');
+        } catch (IllegalArgumentException e) {
+            System.assert(e.getMessage().contains('You must call setRecords() before execution'), 'Should throw appropriate error message');
         }
         Test.stopTest();
     }
