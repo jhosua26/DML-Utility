@@ -1186,6 +1186,23 @@ public class DmlProcessorTest {
         System.assertEquals(3, insertedAccounts.size());
     }
     
+    @IsTest
+    static void testExecuteDmlCoversExecuteLightweight() {
+        // Arrange
+        List<Account> accounts = createTestAccounts(3);
+        // Act
+        Test.startTest();
+        DmlProcessor processor = new DmlProcessor()
+            .setRecords(accounts)
+            .setOperation(DmlOperationExecutor.Operation.DO_INSERT)
+            .enableLightweightMode();
+        processor.executeDml(); // This will call executeLightweight()
+        Test.stopTest();
+        // Assert
+        List<Account> insertedAccounts = [SELECT Id, Name FROM Account WHERE Name LIKE 'Test Account%'];
+        System.assertEquals(3, insertedAccounts.size());
+    }
+    
     // ===== GETTER TESTS =====
     
     @IsTest
