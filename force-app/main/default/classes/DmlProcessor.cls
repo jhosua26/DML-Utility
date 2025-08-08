@@ -397,7 +397,7 @@ public class DmlProcessor implements Queueable {
         if (records == null || records.isEmpty()) {
             throw new IllegalArgumentException('You must call setRecords() before execution.');
         }
-        
+        initializeComponents(); // Ensure operationExecutor and context are set
         for (List<SObject> chunk : chunker.split(records)) {
             try {
                 operationExecutor.execute(chunk, operation);
